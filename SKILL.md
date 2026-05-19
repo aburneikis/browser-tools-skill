@@ -64,6 +64,25 @@ Common use cases:
 - User says "extract data from these items" → Use this tool to let them select the elements
 - When you need specific selectors but the page structure is complex or ambiguous
 
+## Upload Files
+
+```bash
+{baseDir}/browser-upload.js 'input[type=file]' /tmp/photo.jpg
+{baseDir}/browser-upload.js '#docs' a.pdf b.pdf   # input must have 'multiple'
+```
+
+Attach files to an `<input type="file">` element. Use this whenever a page needs a
+file upload - JS assignment to `input.files` is blocked by the browser, so
+`browser-eval.js` cannot do this. This script uses CDP (`DOM.setFileInputFiles`
+via puppeteer's `uploadFile`) and dispatches `input`/`change` events afterwards.
+
+Notes:
+- Paths are resolved to absolute and must be readable by the Chrome process.
+- The selector must resolve to a real `<input type="file">`. For drag-and-drop
+  dropzone components, find the hidden file input nested inside the component
+  (often `<the-dropzone> input[type=file]`) and target that.
+- Multiple files require the input to have the `multiple` attribute.
+
 ## Cookies
 
 ```bash
