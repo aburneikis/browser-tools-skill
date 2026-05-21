@@ -40,6 +40,11 @@ if (useProfile) {
 			--exclude='SingletonLock' \
 			--exclude='SingletonSocket' \
 			--exclude='SingletonCookie' \
+			--exclude='*/Extensions' \
+			--exclude='*/Extension State' \
+			--exclude='*/Extension Rules' \
+			--exclude='*/Local Extension Settings' \
+			--exclude='*/Sync Extension Settings' \
 			--exclude='*/Sessions/*' \
 			--exclude='*/Current Session' \
 			--exclude='*/Current Tabs' \
@@ -58,6 +63,7 @@ spawn(
 		`--user-data-dir=${SCRAPING_DIR}`,
 		"--no-first-run",
 		"--no-default-browser-check",
+		"--disable-extensions",
 		"--ozone-platform=wayland",
 	],
 	{ detached: true, stdio: "ignore" },
