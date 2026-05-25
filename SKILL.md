@@ -25,6 +25,16 @@ npm install
 
 Launch Chrome with remote debugging on `:9222`. Use `--profile` to preserve user's authentication state.
 
+## Stop Chrome
+
+`browser-start.js` detaches Chrome and writes no pidfile. To stop it (and its 30+ helper processes), kill by the debugging-port flag:
+
+```bash
+pkill -f 'remote-debugging-port=9222'
+```
+
+If you started Chrome solely for a one-off agent task, ask the user whether to stop it before declaring the task done - they may want to keep the session alive for follow-up work.
+
 ## Navigate
 
 ```bash
