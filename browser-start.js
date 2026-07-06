@@ -6,22 +6,33 @@ import puppeteer from "puppeteer-core";
 const useProfile = process.argv[2] === "--profile";
 
 if (process.argv[2] && process.argv[2] !== "--profile") {
-	console.log("Usage: browser-start.js [--profile]");
+	console.log("Usage: [CDP_PORT=<port>] browser-start.js [--profile]");
 	console.log("\nOptions:");
 	console.log("  --profile  Copy your default Chrome profile (cookies, logins)");
+	console.log("\nEnvironment:");
+	console.log("  CDP_PORT   Remote debugging port (default 9222). Each port gets");
+	console.log("             its own Chrome instance and profile dir, so multiple");
+	console.log("             browsers can run simultaneously.");
 	process.exit(1);
 }
 
-const SCRAPING_DIR = `${process.env.HOME}/.cache/browser-tools`;
+const CDP_PORT = Number(process.env.CDP_PORT || 9222);
+// Per-port profile dir: Chrome allows only one instance per user-data-dir
+// (SingletonLock), so each CDP port needs its own. Port 9222 keeps the
+// historical un-suffixed dir for backwards compatibility.
+const SCRAPING_DIR =
+	CDP_PORT === 9222
+		? `${process.env.HOME}/.cache/browser-tools`
+		: `${process.env.HOME}/.cache/browser-tools-${CDP_PORT}`;
 
-// Check if already running on :9222
+// Check if already running on this port
 try {
 	const browser = await puppeteer.connect({
-		browserURL: "http://localhost:9222",
+		browserURL: `http://localhost:${CDP_PORT}`,
 		defaultViewport: null,
 	});
 	await browser.disconnect();
-	console.log("✓ Chrome already running on :9222");
+	console.log(`✓ Chrome already running on :${CDP_PORT}`);
 	process.exit(0);
 } catch {}
 
@@ -59,7 +70,7 @@ if (useProfile) {
 spawn(
 	"google-chrome",
 	[
-		"--remote-debugging-port=9222",
+		`--remote-debugging-port=${CDP_PORT}`,
 		`--user-data-dir=${SCRAPING_DIR}`,
 		"--no-first-run",
 		"--profile-directory=Default",
@@ -81,7 +92,7 @@ let connected = false;
 for (let i = 0; i < 30; i++) {
 	try {
 		const browser = await puppeteer.connect({
-			browserURL: "http://localhost:9222",
+			browserURL: `http://localhost:${CDP_PORT}`,
 			defaultViewport: null,
 		});
 		await browser.disconnect();
@@ -97,4 +108,4 @@ if (!connected) {
 	process.exit(1);
 }
 
-console.log(`✓ Chrome started on :9222${useProfile ? " with your profile" : ""}`);
+console.log(`✓ Chrome started on :${CDP_PORT}${useProfile ? " with your profile" : ""}`);

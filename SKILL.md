@@ -5,7 +5,7 @@ description: Interactive browser automation via Chrome DevTools Protocol. Use wh
 
 # Browser Tools
 
-Chrome DevTools Protocol tools for agent-assisted web automation. These tools connect to Chrome running on `:9222` with remote debugging enabled.
+Chrome DevTools Protocol tools for agent-assisted web automation. These tools connect to Chrome running on `:9222` with remote debugging enabled (override with `CDP_PORT`, see "Multiple browser instances").
 
 ## Setup
 
@@ -23,14 +23,39 @@ npm install
 {baseDir}/browser-start.js --profile    # Copy user's profile (cookies, logins)
 ```
 
-Launch Chrome with remote debugging on `:9222`. Use `--profile` to preserve user's authentication state.
+Launch Chrome with remote debugging on `:9222`. Use `--profile` to preserve user's authentication state. Idempotent per port: if a debuggable Chrome is already on the port it just reports it.
+
+## Check what's running
+
+```bash
+{baseDir}/browser-status.js               # list all debuggable Chrome instances + tabs
+{baseDir}/browser-status.js --port 9223   # exit 0 if running on that port, 1 if free
+```
+
+**Check before you start.** Before launching a new instance on a non-default port, run `browser-status.js` to see which ports are taken. For any other TCP port (dev servers etc.), check with:
+
+```bash
+ss -ltnp "sport = :7766"    # empty output = port free
+```
+
+## Multiple browser instances
+
+Every script honors the `CDP_PORT` env var (default `9222`). Each port gets its own Chrome instance and profile dir (`~/.cache/browser-tools-<port>`), so several browsers can run and be driven simultaneously - e.g. two independent agent sessions, or two webapps logged in as different users:
+
+```bash
+CDP_PORT=9223 {baseDir}/browser-start.js
+CDP_PORT=9223 {baseDir}/browser-nav.js https://example.com
+CDP_PORT=9223 {baseDir}/browser-eval.js 'document.title'
+```
+
+All commands for the same instance must use the same `CDP_PORT`. Stop a specific instance with `pkill -f 'remote-debugging-port=9223'`.
 
 ## Stop Chrome
 
 `browser-start.js` detaches Chrome and writes no pidfile. To stop it (and its 30+ helper processes), kill by the debugging-port flag:
 
 ```bash
-pkill -f 'remote-debugging-port=9222'
+pkill -f 'remote-debugging-port=9222'   # use the instance's CDP_PORT
 ```
 
 If you started Chrome solely for a one-off agent task, ask the user whether to stop it before declaring the task done - they may want to keep the session alive for follow-up work.

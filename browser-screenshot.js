@@ -6,7 +6,7 @@ import puppeteer from "puppeteer-core";
 
 const b = await Promise.race([
 	puppeteer.connect({
-		browserURL: "http://localhost:9222",
+		browserURL: `http://localhost:${process.env.CDP_PORT || 9222}`,
 		defaultViewport: null,
 	}),
 	new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
