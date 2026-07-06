@@ -62,6 +62,8 @@ spawn(
 		"--remote-debugging-port=9222",
 		`--user-data-dir=${SCRAPING_DIR}`,
 		"--no-first-run",
+		"--profile-directory=Default",
+		"about:blank",
 		"--no-default-browser-check",
 		"--disable-extensions",
 		"--ozone-platform=wayland",
@@ -93,19 +95,6 @@ for (let i = 0; i < 30; i++) {
 if (!connected) {
 	console.error("✗ Failed to connect to Chrome");
 	process.exit(1);
-}
-
-// Give Chrome a moment to finish initializing after the port responds
-await new Promise((r) => setTimeout(r, 2000));
-
-// Always open a new tab after starting
-{
-	const browser = await puppeteer.connect({
-		browserURL: "http://localhost:9222",
-		defaultViewport: null,
-	});
-	await browser.newPage();
-	await browser.disconnect();
 }
 
 console.log(`✓ Chrome started on :9222${useProfile ? " with your profile" : ""}`);
