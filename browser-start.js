@@ -65,6 +65,11 @@ spawn(
 		"--no-default-browser-check",
 		"--disable-extensions",
 		"--ozone-platform=wayland",
+		// WebGL support
+		"--ignore-gpu-blocklist",
+		"--enable-webgl",
+		"--enable-unsafe-swiftshader",
+		"--use-angle=swiftshader",
 	],
 	{ detached: true, stdio: "ignore" },
 ).unref();
