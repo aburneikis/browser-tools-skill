@@ -3,12 +3,18 @@
 import { spawn, execSync } from "node:child_process";
 import puppeteer from "puppeteer-core";
 
-const useProfile = process.argv[2] === "--profile";
+const args = process.argv.slice(2);
+const useProfile = args.includes("--profile");
+const noExtensions = args.includes("--no-extensions");
+const unknown = args.filter((a) => a !== "--profile" && a !== "--no-extensions");
 
-if (process.argv[2] && process.argv[2] !== "--profile") {
-	console.log("Usage: [CDP_PORT=<port>] browser-start.js [--profile]");
+if (unknown.length) {
+	console.log("Usage: [CDP_PORT=<port>] browser-start.js [--profile] [--no-extensions]");
 	console.log("\nOptions:");
-	console.log("  --profile  Copy your default Chrome profile (cookies, logins)");
+	console.log("  --profile        Copy your default Chrome profile (cookies, logins,");
+	console.log("                   extensions)");
+	console.log("  --no-extensions  Disable extensions (Web Store installs will fail");
+	console.log("                   with 'Installation is not enabled')");
 	console.log("\nEnvironment:");
 	console.log("  CDP_PORT   Remote debugging port (default 9222). Each port gets");
 	console.log("             its own Chrome instance and profile dir, so multiple");
@@ -46,16 +52,23 @@ try {
 
 if (useProfile) {
 	console.log("Syncing profile...");
+	const extensionExcludes = noExtensions
+		? [
+				"Extensions",
+				"Extension State",
+				"Extension Rules",
+				"Local Extension Settings",
+				"Sync Extension Settings",
+			]
+				.map((d) => `--exclude='*/${d}'`)
+				.join(" ")
+		: "";
 	execSync(
 		`rsync -a --delete \
 			--exclude='SingletonLock' \
 			--exclude='SingletonSocket' \
 			--exclude='SingletonCookie' \
-			--exclude='*/Extensions' \
-			--exclude='*/Extension State' \
-			--exclude='*/Extension Rules' \
-			--exclude='*/Local Extension Settings' \
-			--exclude='*/Sync Extension Settings' \
+			${extensionExcludes} \
 			--exclude='*/Sessions/*' \
 			--exclude='*/Current Session' \
 			--exclude='*/Current Tabs' \
@@ -76,7 +89,7 @@ spawn(
 		"--profile-directory=Default",
 		"about:blank",
 		"--no-default-browser-check",
-		"--disable-extensions",
+		...(noExtensions ? ["--disable-extensions"] : []),
 		"--ozone-platform=wayland",
 		// WebGL support
 		"--ignore-gpu-blocklist",
@@ -108,4 +121,6 @@ if (!connected) {
 	process.exit(1);
 }
 
-console.log(`✓ Chrome started on :${CDP_PORT}${useProfile ? " with your profile" : ""}`);
+console.log(
+	`✓ Chrome started on :${CDP_PORT}${useProfile ? " with your profile" : ""}${noExtensions ? " (extensions disabled)" : ""}`,
+);

@@ -19,11 +19,14 @@ npm install
 ## Start Chrome
 
 ```bash
-{baseDir}/browser-start.js              # Fresh profile
-{baseDir}/browser-start.js --profile    # Copy user's profile (cookies, logins)
+{baseDir}/browser-start.js                    # Fresh profile
+{baseDir}/browser-start.js --profile          # Copy user's profile (cookies, logins, extensions)
+{baseDir}/browser-start.js --no-extensions    # Disable extensions
 ```
 
 Launch Chrome with remote debugging on `:9222`. Use `--profile` to preserve user's authentication state. Idempotent per port: if a debuggable Chrome is already on the port it just reports it.
+
+Extensions are enabled by default, so Chrome Web Store installs work. Pass `--no-extensions` for a clean, extension-free browser (Web Store installs then fail with "Installation is not enabled").
 
 ## Check what's running
 
