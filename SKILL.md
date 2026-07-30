@@ -16,6 +16,19 @@ cd {baseDir}/browser-tools
 npm install
 ```
 
+If you need something these scripts don't cover, write a small script next to them and
+reuse the shared helpers instead of re-doing the connect boilerplate:
+
+```js
+import { connect, activePage, sleep } from "./lib.mjs";
+const browser = await connect();            // honours CDP_PORT, clear error if not running
+const page = await activePage(browser);     // last real tab; pass "localhost:7766" to prefer a tab
+// ...
+await browser.disconnect();
+```
+
+Delete such scratch scripts once done - only generally useful ones belong in this skill.
+
 ## Start Chrome
 
 ```bash
@@ -81,13 +94,49 @@ Navigate to URLs. Use `--new` flag to open in a new tab instead of reusing curre
 
 Execute JavaScript in the active tab. Code runs in async context. Use this to extract data, inspect page state, or perform DOM operations programmatically.
 
+## Type Into Inputs
+
+```bash
+{baseDir}/browser-type.js '#email' user@example.com
+{baseDir}/browser-type.js '#search' 'hello world' --enter
+{baseDir}/browser-type.js '#address' '1 Smith St' --pick-suggestion
+{baseDir}/browser-type.js '#q' 'text' --delay 100 --pick-suggestion '.my-autocomplete li'
+```
+
+Types with real keyboard events (waits for the selector, selects and clears the existing
+value first). Prefer this over setting `input.value` via `browser-eval.js`: frameworks
+(Angular/React) and autocompletes only react to genuine `keydown`/`input` events.
+
+- `--enter` presses Enter afterwards (submit / search).
+- `--pick-suggestion [selector]` waits ~1.5s then clicks the first suggestion. Default
+  selector `.pac-container .pac-item` handles Google Places address autocomplete.
+
 ## Screenshot
 
 ```bash
-{baseDir}/browser-screenshot.js
+{baseDir}/browser-screenshot.js                        # viewport -> temp file path
+{baseDir}/browser-screenshot.js --full                 # full scrollable page
+{baseDir}/browser-screenshot.js --selector '.my-card'  # just one element
+{baseDir}/browser-screenshot.js /tmp/out.png           # explicit output path
 ```
 
-Capture current viewport and return temporary file path. Use this to visually inspect page state or verify UI changes.
+Capture the page and print the file path. Use this to visually inspect page state or verify UI changes.
+
+## Emulate Viewport / Device / Network
+
+```bash
+{baseDir}/browser-emulate.js mobile        # 390x844, isMobile + touch, dpr 2
+{baseDir}/browser-emulate.js tablet        # 820x1180
+{baseDir}/browser-emulate.js desktop       # 1440x900
+{baseDir}/browser-emulate.js 760x760       # arbitrary size, e.g. to hit a breakpoint
+{baseDir}/browser-emulate.js reset         # clear device metrics override
+{baseDir}/browser-emulate.js --offline     # simulate network loss (--online to restore)
+```
+
+Use this to test responsive layouts and truncation/overflow bugs: shrink the viewport,
+then screenshot or read computed styles with `browser-eval.js`. Viewport, `isMobile` and
+touch overrides persist after the script exits; user-agent overrides do not (they are
+bound to the CDP session), so this does not spoof `navigator.userAgent`.
 
 ## Pick Elements
 
@@ -151,7 +200,8 @@ Navigate to a URL and extract readable content as markdown. Uses Mozilla Readabi
 
 ### DOM Inspection Over Screenshots
 
-**Don't** take screenshots to see page state. **Do** parse the DOM directly:
+For reading state, parse the DOM rather than screenshotting (screenshots are for visual
+verification and layout bugs):
 
 ```javascript
 // Get page structure
@@ -224,6 +274,31 @@ Extract structured state in one call:
   };
   return JSON.stringify(state, null, 2);
 })()
+```
+
+### Debugging Layout / CSS Bugs
+
+Combine `browser-emulate.js` with computed-style reads instead of writing one-off scripts:
+
+```bash
+{baseDir}/browser-emulate.js 760x760
+{baseDir}/browser-eval.js '(() => {
+  const el = document.querySelector(".my-tag");
+  const cs = getComputedStyle(el);
+  return { text: el.textContent.trim(), width: el.getBoundingClientRect().width,
+           overflow: cs.overflow, bg: cs.backgroundColor };
+})()'
+{baseDir}/browser-screenshot.js --selector '.my-tag'
+```
+
+You can also force a container narrow to reproduce truncation without resizing the window:
+
+```bash
+{baseDir}/browser-eval.js '(() => {
+  const cell = document.querySelector("td.Cell");
+  cell.style.maxWidth = "60px";
+  return cell.getBoundingClientRect().width;
+})()'
 ```
 
 ### Waiting for Updates

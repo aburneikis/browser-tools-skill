@@ -2,33 +2,34 @@
 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import puppeteer from "puppeteer-core";
+import { connect, activePage } from "./lib.mjs";
 
-const b = await Promise.race([
-	puppeteer.connect({
-		browserURL: `http://localhost:${process.env.CDP_PORT || 9222}`,
-		defaultViewport: null,
-	}),
-	new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
-]).catch((e) => {
-	console.error("✗ Could not connect to browser:", e.message);
-	console.error("  Run: browser-start.js");
-	process.exit(1);
-});
-
-const allPages = await b.pages();
-const p = allPages.filter(p => !p.url().startsWith("chrome://") && !p.url().startsWith("chrome-extension://")).at(-1);
-
-if (!p) {
-	console.error("✗ No active tab found");
-	process.exit(1);
+const args = process.argv.slice(2);
+let fullPage = false;
+let out = null;
+let selector = null;
+for (let i = 0; i < args.length; i++) {
+	if (args[i] === "--full") fullPage = true;
+	else if (args[i] === "--selector") selector = args[++i];
+	else if (args[i] === "--help" || args[i] === "-h") {
+		console.log("Usage: browser-screenshot.js [outfile.png] [--full] [--selector CSS]");
+		console.log("  no outfile -> writes a timestamped png in $TMPDIR and prints the path");
+		process.exit(0);
+	} else out = args[i];
 }
 
-const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-const filename = `screenshot-${timestamp}.png`;
-const filepath = join(tmpdir(), filename);
+const b = await connect();
+const p = await activePage(b);
 
-await p.screenshot({ path: filepath });
+const filepath =
+	out || join(tmpdir(), `screenshot-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
+
+if (selector) {
+	const el = await p.waitForSelector(selector, { timeout: 10000 });
+	await el.screenshot({ path: filepath });
+} else {
+	await p.screenshot({ path: filepath, fullPage });
+}
 
 console.log(filepath);
 

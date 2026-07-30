@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import puppeteer from "puppeteer-core";
+import { connect, activePage } from "./lib.mjs";
 import path from "node:path";
 import fs from "node:fs";
 
@@ -28,27 +28,8 @@ for (const f of absFiles) {
 	}
 }
 
-const b = await Promise.race([
-	puppeteer.connect({
-		browserURL: `http://localhost:${process.env.CDP_PORT || 9222}`,
-		defaultViewport: null,
-	}),
-	new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
-]).catch((e) => {
-	console.error("Could not connect to browser:", e.message);
-	console.error("  Run: browser-start.js");
-	process.exit(1);
-});
-
-const allPages = await b.pages();
-const p = allPages
-	.filter((p) => !p.url().startsWith("chrome://") && !p.url().startsWith("chrome-extension://"))
-	.at(-1);
-
-if (!p) {
-	console.error("No active tab found");
-	process.exit(1);
-}
+const b = await connect();
+const p = await activePage(b);
 
 const handle = await p.$(selector);
 if (!handle) {
