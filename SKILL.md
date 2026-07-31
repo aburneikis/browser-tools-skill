@@ -76,6 +76,33 @@ pkill -f 'remote-debugging-port=9222'   # use the instance's CDP_PORT
 
 If you started Chrome solely for a one-off agent task, ask the user whether to stop it before declaring the task done - they may want to keep the session alive for follow-up work.
 
+Killing Chrome leaves its profile dir behind (`~/.cache/browser-tools-<port>`, several hundred
+MB each) - see "Clean Up" below.
+
+## Clean Up
+
+These tools leave artifacts around: screenshots and recording dirs in `$TMPDIR`, and a Chrome
+profile dir per port in `~/.cache/browser-tools[-<port>]` which is easily 200-700 MB. Nothing
+is deleted automatically, so throwaway ports accumulate gigabytes.
+
+```bash
+{baseDir}/browser-clean.js                  # dry-run report of what is reclaimable
+{baseDir}/browser-clean.js --yes            # delete artifacts older than 1 day + idle profiles
+{baseDir}/browser-clean.js --days 0 --yes   # ignore age, delete everything idle
+{baseDir}/browser-clean.js --tmp --yes      # only /tmp screenshots + recordings
+{baseDir}/browser-clean.js --profiles       # only profile dirs
+```
+
+Safety behaviour:
+- Dry-run by default; nothing is removed without `--yes`.
+- A profile dir is never deleted while something is listening on its port (it prints
+  `live keep :<port>` instead), so running sessions are safe.
+- The default profile (`~/.cache/browser-tools`, port 9222) is skipped unless you pass
+  `--all`, because deleting it discards saved logins and cookies. Ask the user first.
+
+Run this after a session that spun up extra `CDP_PORT` instances, and mention the reclaimable
+size rather than deleting profiles the user may still want logged in.
+
 ## Navigate
 
 ```bash
@@ -175,6 +202,8 @@ here). Frame timestamps drive the per-frame durations, so playback speed matches
   no other windows, and it keeps working if the window is behind another one.
 - Video is one artifact for a human; frames + `timeline.txt` are what you should read when
   diagnosing. `--video --keep-frames` gives both.
+- Recording dirs live in `$TMPDIR` and are not cleaned up automatically - see "Clean Up".
+  Pass `--out <dir>` to put a recording somewhere you control.
 
 Guidelines:
 - Use `--click/--eval/--nav` rather than clicking in one command and recording in another -
