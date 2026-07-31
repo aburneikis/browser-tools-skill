@@ -122,6 +122,41 @@ value first). Prefer this over setting `input.value` via `browser-eval.js`: fram
 
 Capture the page and print the file path. Use this to visually inspect page state or verify UI changes.
 
+## Record Transitions (animations, spinners, redirects)
+
+**A single screenshot after an action almost always shows the wrong moment.** By the time a
+separate `browser-screenshot.js` process has started (~0.3-1s, plus any `sleep` you added),
+the spinner is gone, the toast has faded, the animation has finished, and the app may have
+redirected two or three times. You never see what you were asked to check.
+
+`browser-record.js` fixes this by starting the capture *before* performing the action, in
+the same process:
+
+```bash
+{baseDir}/browser-record.js --click 'button[type=submit]' --duration 6 --fps 8
+{baseDir}/browser-record.js --nav https://example.com/login --duration 4
+{baseDir}/browser-record.js --eval 'document.querySelector(".toast-trigger").click()'
+{baseDir}/browser-record.js --none --duration 10     # user clicks around; you just record
+```
+
+Output is a directory of `frame-NNNN-<ms>ms.png` files plus `timeline.txt` interleaving
+frames with `navigated` / `load` / `dialog` / console-error / `pageerror` events, so you can
+see the full redirect chain and pick the exact frame you care about:
+
+```
+     0ms  nav        http://github.com/login
+   291ms  navigated  https://github.com/login
+   703ms  load       https://github.com/login
+```
+
+Guidelines:
+- Use `--click/--eval/--nav` rather than clicking in one command and recording in another -
+  that reintroduces the race.
+- Bump `--fps` (up to ~10) for short animations; raise `--duration` for slow redirect chains.
+- Frames come from both CDP screencast (repaint-driven) and a fixed-interval sampler, so
+  static-but-transient pages such as "Redirecting..." interstitials are still captured.
+- Read specific frames with the `read` tool; the timestamps in the filenames tell you which.
+
 ## Emulate Viewport / Device / Network
 
 ```bash
@@ -308,6 +343,30 @@ If DOM updates after actions, add a small delay with bash:
 ```bash
 sleep 0.5 && {baseDir}/browser-eval.js '...'
 ```
+
+But be aware what a `sleep` costs you: anything transient that happened during it is gone.
+For state that only exists briefly, do not sleep-then-look - either record the whole window
+with `browser-record.js`, or poll/latch inside the page so the evidence survives:
+
+```bash
+# Latch transient DOM state from inside the page instead of trying to catch it from outside
+{baseDir}/browser-eval.js '(async () => {
+  const seen = [];
+  const stop = Date.now() + 5000;
+  const obs = new MutationObserver(() => {
+    const s = document.querySelector(".spinner, .toast, [role=alert]");
+    if (s) seen.push({ t: Date.now(), cls: s.className, text: s.textContent.trim() });
+  });
+  obs.observe(document.body, { subtree: true, childList: true, attributes: true });
+  document.querySelector("#submit").click();
+  while (Date.now() < stop) await new Promise(r => setTimeout(r, 100));
+  obs.disconnect();
+  return JSON.stringify(seen);
+})()'
+```
+
+Note this latching approach dies on navigation - if the action redirects, use
+`browser-record.js` instead.
 
 ### Investigate Before Interacting
 
