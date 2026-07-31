@@ -149,6 +149,33 @@ see the full redirect chain and pick the exact frame you care about:
    703ms  load       https://github.com/login
 ```
 
+### Screen recordings (mp4 / gif)
+
+Add `--video` or `--gif` to encode the captured frames with ffmpeg (required; already present
+here). Frame timestamps drive the per-frame durations, so playback speed matches real time.
+
+```bash
+# Record a scripted action as an mp4
+{baseDir}/browser-record.js --click '#submit' --duration 6 --fps 10 --video /tmp/submit.mp4
+
+# Record while a human drives the browser: starts recording, stops when you press Enter
+{baseDir}/browser-record.js --none --wait-enter --video /tmp/demo.mp4
+
+# Short animation as a gif for a Phabricator revision / bug report
+{baseDir}/browser-record.js --click '#play' --duration 3 --fps 15 --gif /tmp/anim.gif
+```
+
+- Omit the filename (`--video` alone) to get `recording.mp4` inside the output dir.
+- PNG frames are deleted after a successful encode; pass `--keep-frames` to keep them (useful
+  when you also want to `read` individual frames).
+- `--wait-enter` records until Enter is pressed on stdin (combine with `--duration` for a cap).
+  This is the mode to use for "record me doing X in the browser" - it needs an interactive
+  terminal, so run it yourself rather than expecting the agent to press Enter.
+- The recording covers the tab CDP is attached to, not the whole desktop: no OS chrome,
+  no other windows, and it keeps working if the window is behind another one.
+- Video is one artifact for a human; frames + `timeline.txt` are what you should read when
+  diagnosing. `--video --keep-frames` gives both.
+
 Guidelines:
 - Use `--click/--eval/--nav` rather than clicking in one command and recording in another -
   that reintroduces the race.
