@@ -137,10 +137,6 @@ export async function connect(timeoutMs = CONNECT_TIMEOUT) {
 }
 
 /**
- * Pick the page to act on: the most recently used real tab.
- * Pass a substring (e.g. "localhost:7766") to prefer a matching tab.
- */
-/**
  * Resilient replacement for `browser.pages()`, which rejects wholesale if any
  * single target fails to attach ("Tab target session is not defined"). Resolves
  * targets individually so one broken tab cannot hide every usable one.
@@ -165,6 +161,10 @@ export async function allPages(browser) {
 		.map((r) => r.page);
 }
 
+/**
+ * Pick the page to act on: the most recently used real tab.
+ * Pass a substring (e.g. "localhost:7766") to prefer a matching tab.
+ */
 export async function activePage(browser, match) {
 	const pages = (await allPages(browser)).filter(
 		(p) => !p.url().startsWith("chrome://") && !p.url().startsWith("chrome-extension://"),

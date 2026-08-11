@@ -36,6 +36,10 @@ const pages = allPagesList.filter(p => {
 	return !u.startsWith("chrome-extension://") && !u.startsWith("chrome://") && !u.includes("fbsbx.com");
 });
 const foregroundPage = pages.at(0) ?? allPagesList.at(-1);
+if (!newTab && !foregroundPage) {
+	console.error("✗ No usable tab found");
+	process.exit(1);
+}
 
 if (newTab) {
 	const p = await b.newPage();

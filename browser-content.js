@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { connect, allPages } from "./lib.mjs";
+import { connect, activePage } from "./lib.mjs";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
@@ -25,13 +25,7 @@ if (!url) {
 }
 
 const b = await connect();
-
-const allPagesList = await allPages(b);
-const p = allPagesList.filter(p => !p.url().startsWith("chrome://") && !p.url().startsWith("chrome-extension://")).at(-1);
-if (!p) {
-	console.error("✗ No active tab found");
-	process.exit(1);
-}
+const p = await activePage(b);
 
 await Promise.race([
 	p.goto(url, { waitUntil: "networkidle2" }),

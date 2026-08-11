@@ -29,7 +29,7 @@ if (!selector || text === undefined) {
 const browser = await connect();
 const page = await activePage(browser);
 
-const el = await page.waitForSelector(selector, { timeout: 10000 });
+await page.waitForSelector(selector, { timeout: 10000 });
 
 // Runs in the page's main world: element handles evaluate in an isolated world
 // whose HTMLInputElement.prototype is a different object, so its native setter
@@ -41,9 +41,13 @@ const inPage = (fn) => page.evaluate(fn, selector);
 await inPage((s) => {
 	const node = document.querySelector(s);
 	node.focus();
-	const proto =
-		node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-	Object.getOwnPropertyDescriptor(proto, "value").set.call(node, "");
+	if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
+		const proto =
+			node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+		Object.getOwnPropertyDescriptor(proto, "value").set.call(node, "");
+	} else if (node.isContentEditable) {
+		node.textContent = "";
+	}
 	node.dispatchEvent(new Event("input", { bubbles: true }));
 });
 
