@@ -30,9 +30,36 @@ const browser = await connect();
 const page = await activePage(browser);
 
 const el = await page.waitForSelector(selector, { timeout: 10000 });
-await el.click({ clickCount: 3 }); // select existing value
-await page.keyboard.press("Backspace");
-await el.type(text, { delay });
+
+// Runs in the page's main world: element handles evaluate in an isolated world
+// whose HTMLInputElement.prototype is a different object, so its native setter
+// would never reach the one frameworks patch.
+const inPage = (fn) => page.evaluate(fn, selector);
+
+// A triple-click + Backspace silently misses on some widgets, splicing the new
+// text into the old, so clear through the value setter instead.
+await inPage((s) => {
+	const node = document.querySelector(s);
+	node.focus();
+	const proto =
+		node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+	Object.getOwnPropertyDescriptor(proto, "value").set.call(node, "");
+	node.dispatchEvent(new Event("input", { bubbles: true }));
+});
+
+await page.keyboard.type(text, { delay });
+
+// Commit the value: controls bound with Angular's `updateOn: 'blur'` (common in
+// this codebase) only write to the model on blur, so without this the DOM shows
+// the text while the form model stays empty and submits blank.
+if (!pickSuggestion && !enter) {
+	await inPage((s) => {
+		const node = document.querySelector(s);
+		node.dispatchEvent(new Event("change", { bubbles: true }));
+		node.blur();
+		node.dispatchEvent(new Event("blur", { bubbles: true }));
+	});
+}
 
 if (pickSuggestion) {
 	await sleep(1500);
