@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { connect, activePage } from "./lib.mjs";
+import { connect, activePage, tmpPath } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 let fullPage = false;
@@ -21,8 +19,7 @@ for (let i = 0; i < args.length; i++) {
 const b = await connect();
 const p = await activePage(b);
 
-const filepath =
-	out || join(tmpdir(), `screenshot-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
+const filepath = out || tmpPath("screenshot", ".png");
 
 if (selector) {
 	const el = await p.waitForSelector(selector, { timeout: 10000 });

@@ -30,12 +30,12 @@ const navigate = async (page) => {
 };
 
 // Get only real page tabs (exclude service workers, extensions, chrome:// internal pages)
-const allPagesList = await allPages(b);
-const pages = allPagesList.filter(p => {
+const pages = await allPages(b);
+const realPages = pages.filter(p => {
 	const u = p.url();
 	return !u.startsWith("chrome-extension://") && !u.startsWith("chrome://") && !u.includes("fbsbx.com");
 });
-const foregroundPage = pages.at(0) ?? allPagesList.at(-1);
+const foregroundPage = realPages.at(0) ?? pages.at(-1);
 if (!newTab && !foregroundPage) {
 	console.error("✗ No usable tab found");
 	process.exit(1);

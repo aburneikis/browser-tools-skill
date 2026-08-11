@@ -51,10 +51,9 @@ const human = (b) => {
 
 const isLive = async (port) => {
 	try {
-		const c = new AbortController();
-		const t = setTimeout(() => c.abort(), 500);
-		const r = await fetch(`http://localhost:${port}/json/version`, { signal: c.signal });
-		clearTimeout(t);
+		const r = await fetch(`http://localhost:${port}/json/version`, {
+			signal: AbortSignal.timeout(500),
+		});
 		return r.ok;
 	} catch {
 		return false;

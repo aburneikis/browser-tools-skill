@@ -1,4 +1,6 @@
 // Shared helpers for the browser-tools scripts.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 
 export const CDP_PORT = process.env.CDP_PORT || 9222;
@@ -194,3 +196,34 @@ export async function activePage(browser, match) {
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Evaluate an expression string in the page within an async context. */
+export function evalAsync(page, code) {
+	return page.evaluate((c) => {
+		const AsyncFunction = (async () => {}).constructor;
+		return new AsyncFunction(`return (${c})`)();
+	}, code);
+}
+
+/** Print an eval result: arrays as blocks of key: value, objects as key: value, scalars as-is. */
+export function printResult(result) {
+	const printEntries = (obj) => {
+		for (const [key, value] of Object.entries(obj)) console.log(`${key}: ${value}`);
+	};
+	if (Array.isArray(result)) {
+		result.forEach((item, i) => {
+			if (i > 0) console.log("");
+			printEntries(item);
+		});
+	} else if (typeof result === "object" && result !== null) {
+		printEntries(result);
+	} else {
+		console.log(result);
+	}
+}
+
+/** Timestamped path in $TMPDIR, e.g. tmpPath("screenshot", ".png"). */
+export function tmpPath(prefix, suffix = "") {
+	const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+	return join(tmpdir(), `${prefix}-${stamp}${suffix}`);
+}

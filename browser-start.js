@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { spawn, execSync } from "node:child_process";
-import puppeteer from "puppeteer-core";
 
 const args = process.argv.slice(2);
 const useProfile = args.includes("--profile");
@@ -31,16 +30,21 @@ const SCRAPING_DIR =
 		? `${process.env.HOME}/.cache/browser-tools`
 		: `${process.env.HOME}/.cache/browser-tools-${CDP_PORT}`;
 
-// Check if already running on this port
-try {
-	const browser = await puppeteer.connect({
-		browserURL: `http://localhost:${CDP_PORT}`,
-		defaultViewport: null,
-	});
-	await browser.disconnect();
+const isUp = async () => {
+	try {
+		const res = await fetch(`http://localhost:${CDP_PORT}/json/version`, {
+			signal: AbortSignal.timeout(2000),
+		});
+		return res.ok;
+	} catch {
+		return false;
+	}
+};
+
+if (await isUp()) {
 	console.log(`✓ Chrome already running on :${CDP_PORT}`);
 	process.exit(0);
-} catch {}
+}
 
 // Setup profile directory
 execSync(`mkdir -p "${SCRAPING_DIR}"`, { stdio: "ignore" });
@@ -102,18 +106,9 @@ spawn(
 
 // Wait for Chrome to be ready
 let connected = false;
-for (let i = 0; i < 30; i++) {
-	try {
-		const browser = await puppeteer.connect({
-			browserURL: `http://localhost:${CDP_PORT}`,
-			defaultViewport: null,
-		});
-		await browser.disconnect();
-		connected = true;
-		break;
-	} catch {
-		await new Promise((r) => setTimeout(r, 500));
-	}
+for (let i = 0; i < 30 && !connected; i++) {
+	connected = await isUp();
+	if (!connected) await new Promise((r) => setTimeout(r, 500));
 }
 
 if (!connected) {

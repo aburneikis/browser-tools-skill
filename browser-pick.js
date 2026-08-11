@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { connect, activePage } from "./lib.mjs";
+import { connect, activePage, printResult } from "./lib.mjs";
 
 const message = process.argv.slice(2).join(" ");
 if (!message) {
@@ -127,21 +127,6 @@ await p.evaluate(() => {
 	}
 });
 
-const result = await p.evaluate((msg) => window.pick(msg), message);
-
-if (Array.isArray(result)) {
-	for (let i = 0; i < result.length; i++) {
-		if (i > 0) console.log("");
-		for (const [key, value] of Object.entries(result[i])) {
-			console.log(`${key}: ${value}`);
-		}
-	}
-} else if (typeof result === "object" && result !== null) {
-	for (const [key, value] of Object.entries(result)) {
-		console.log(`${key}: ${value}`);
-	}
-} else {
-	console.log(result);
-}
+printResult(await p.evaluate((msg) => window.pick(msg), message));
 
 await b.disconnect();

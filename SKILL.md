@@ -22,13 +22,13 @@ await browser.disconnect();
 
 ## Commands
 
-All scripts live in `{baseDir}/` and honour `CDP_PORT` (default 9222).
+All scripts live in `{baseDir}/`.
 
 | Script | Usage / notes |
 |---|---|
 | `browser-start.js [--profile] [--no-extensions]` | Launch Chrome with remote debugging. `--profile` copies the user's profile (cookies, logins). Idempotent per port. |
 | `browser-status.js [--port N]` | List debuggable Chrome instances + tabs. With `--port`: exit 0 if running, 1 if free. |
-| `browser-nav.js <url> [--new]` | Navigate; `--new` opens a new tab. |
+| `browser-nav.js <url> [--new] [--reload]` | Navigate; `--new` opens a new tab; `--reload` forces a reload after navigating. |
 | `browser-eval.js '<js>'` | Run JS in the active tab (async context). |
 | `browser-type.js <sel> <text> [--enter] [--pick-suggestion [sel]] [--delay ms]` | Real keyboard events (waits for selector, clears existing value). Prefer over setting `input.value` via eval - frameworks and autocompletes need real events. Default suggestion selector handles Google Places. |
 | `browser-screenshot.js [--full] [--selector S] [path]` | Capture viewport/page/element; prints file path. |

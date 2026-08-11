@@ -26,15 +26,10 @@ function argPort() {
 
 async function probe(port) {
 	try {
-		const ctl = new AbortController();
-		const t = setTimeout(() => ctl.abort(), 2000);
-		const version = await (
-			await fetch(`http://localhost:${port}/json/version`, { signal: ctl.signal })
-		).json();
-		const tabs = await (
-			await fetch(`http://localhost:${port}/json/list`, { signal: ctl.signal })
-		).json();
-		clearTimeout(t);
+		const get = async (path) =>
+			(await fetch(`http://localhost:${port}${path}`, { signal: AbortSignal.timeout(2000) })).json();
+		const version = await get("/json/version");
+		const tabs = await get("/json/list");
 		return { version, tabs: tabs.filter((t) => t.type === "page") };
 	} catch {
 		return null;

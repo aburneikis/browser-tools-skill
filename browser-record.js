@@ -4,9 +4,8 @@
 // Fixes the classic race: click -> (spinner, animation, 3 redirects) -> screenshot too late.
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect, activePage, sleep } from "./lib.mjs";
+import { connect, activePage, evalAsync, sleep, tmpPath } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 if (!args.length || args.includes("--help") || args.includes("-h")) {
@@ -71,7 +70,7 @@ if ((video !== null || gif !== null) && spawnSync("ffmpeg", ["-version"]).status
 // A screen recording of a person doing things has no known length: default to Enter-to-stop.
 if (waitEnter && !durationGiven) duration = Infinity;
 
-outDir = outDir || join(tmpdir(), `record-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+outDir = outDir || tmpPath("record");
 mkdirSync(outDir, { recursive: true });
 
 const browser = await connect();
@@ -102,12 +101,16 @@ page.on("pageerror", (e) => log("pageerror", e.message.slice(0, 200)));
 
 let n = 0;
 const frames = []; // { ms, file } in capture order, used for encoding
-session.on("Page.screencastFrame", async ({ data, sessionId }) => {
-	const ms = at();
-	const file = join(outDir, `frame-${String(n++).padStart(4, "0")}-${ms}ms.png`);
-	writeFileSync(file, Buffer.from(data, "base64"));
+const nextFramePath = (ms) => join(outDir, `frame-${String(n++).padStart(4, "0")}-${ms}ms.png`);
+const recordFrame = (ms, file) => {
 	frames.push({ ms, file });
 	timeline.push(`${String(ms).padStart(6)}ms  frame      ${file}`);
+};
+session.on("Page.screencastFrame", async ({ data, sessionId }) => {
+	const ms = at();
+	const file = nextFramePath(ms);
+	writeFileSync(file, Buffer.from(data, "base64"));
+	recordFrame(ms, file);
 	try {
 		await session.send("Page.screencastFrameAck", { sessionId });
 	} catch {}
@@ -126,10 +129,9 @@ await session.send("Page.startScreencast", {
 const tick = setInterval(async () => {
 	try {
 		const ms = at();
-		const file = join(outDir, `frame-${String(n++).padStart(4, "0")}-${ms}ms.png`);
+		const file = nextFramePath(ms);
 		await page.screenshot({ path: file });
-		frames.push({ ms, file });
-		timeline.push(`${String(ms).padStart(6)}ms  frame      ${file}`);
+		recordFrame(ms, file);
 	} catch {}
 }, Math.max(50, Math.round(1000 / fps)));
 
@@ -140,7 +142,7 @@ try {
 		await page.click(triggerArg);
 	} else if (trigger === "eval") {
 		log("eval", triggerArg);
-		const r = await page.evaluate((c) => new (async () => {}).constructor(`return (${c})`)(), triggerArg);
+		const r = await evalAsync(page, triggerArg);
 		log("eval-out", JSON.stringify(r)?.slice(0, 200));
 	} else if (trigger === "nav") {
 		log("nav", triggerArg);
