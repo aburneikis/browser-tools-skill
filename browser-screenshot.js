@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { writeFile } from "node:fs/promises";
 import { connect, activePage, tmpPath } from "./lib.mjs";
 
 const args = process.argv.slice(2);
@@ -22,8 +23,36 @@ const p = await activePage(b);
 const filepath = out || tmpPath("screenshot", ".png");
 
 if (selector) {
+	// Element capture deliberately avoids ElementHandle.screenshot: that scrolls
+	// the element into view via an IntersectionObserver, and a window parked on a
+	// background workspace has an unmapped Wayland surface that produces no
+	// frames, so the observer never fires and the capture blocks until the user
+	// tabs back. Scrolling first is no fix either - the same missing frames make
+	// the capture return pixels from the pre-scroll position. Capturing absolute
+	// page coordinates with captureBeyondViewport needs neither scroll nor frame.
 	const el = await p.waitForSelector(selector, { timeout: 10000 });
-	await el.screenshot({ path: filepath });
+	const clip = await el.evaluate((node) => {
+		const r = node.getBoundingClientRect();
+		return {
+			x: r.left + window.scrollX,
+			y: r.top + window.scrollY,
+			width: r.width,
+			height: r.height,
+			scale: window.devicePixelRatio || 1,
+		};
+	});
+	if (clip.width === 0 || clip.height === 0) {
+		console.error(`\u2717 '${selector}' has a zero-sized box (hidden?), nothing to capture`);
+		process.exit(1);
+	}
+	const session = await p.createCDPSession();
+	const { data } = await session.send("Page.captureScreenshot", {
+		format: "png",
+		captureBeyondViewport: true,
+		clip,
+	});
+	await session.detach().catch(() => {});
+	await writeFile(filepath, Buffer.from(data, "base64"));
 } else {
 	await p.screenshot({ path: filepath, fullPage });
 }
