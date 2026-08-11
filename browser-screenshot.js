@@ -22,15 +22,12 @@ const p = await activePage(b);
 
 const filepath = out || tmpPath("screenshot", ".png");
 
-if (selector) {
-	// Element capture deliberately avoids ElementHandle.screenshot: that scrolls
-	// the element into view via an IntersectionObserver, and a window parked on a
-	// background workspace has an unmapped Wayland surface that produces no
-	// frames, so the observer never fires and the capture blocks until the user
-	// tabs back. Scrolling first is no fix either - the same missing frames make
-	// the capture return pixels from the pre-scroll position. Capturing absolute
-	// page coordinates with captureBeyondViewport needs neither scroll nor frame.
-	const el = await p.waitForSelector(selector, { timeout: 10000 });
+// ElementHandle.screenshot scrolls the element into view via an
+// IntersectionObserver, which never fires when the window has an unmapped
+// surface (background workspace on a tiling WM) - the call then hangs until
+// the window becomes visible. Fallback: capture absolute page coordinates
+// with captureBeyondViewport, which needs neither scroll nor rendered frame.
+async function captureByClip(el) {
 	const clip = await el.evaluate((node) => {
 		const r = node.getBoundingClientRect();
 		return {
@@ -53,6 +50,21 @@ if (selector) {
 	});
 	await session.detach().catch(() => {});
 	await writeFile(filepath, Buffer.from(data, "base64"));
+}
+
+if (selector) {
+	const el = await p.waitForSelector(selector, { timeout: 10000 });
+	let timer;
+	const timeout = new Promise((r) => {
+		timer = setTimeout(() => r("timeout"), 5000);
+		timer.unref();
+	});
+	const result = await Promise.race([
+		el.screenshot({ path: filepath }).then(() => "ok", () => "error"),
+		timeout,
+	]);
+	clearTimeout(timer);
+	if (result !== "ok") await captureByClip(el);
 } else {
 	await p.screenshot({ path: filepath, fullPage });
 }

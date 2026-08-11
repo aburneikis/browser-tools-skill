@@ -106,7 +106,9 @@ const recordFrame = (ms, file) => {
 	frames.push({ ms, file });
 	timeline.push(`${String(ms).padStart(6)}ms  frame      ${file}`);
 };
+let screencastFrames = 0;
 session.on("Page.screencastFrame", async ({ data, sessionId }) => {
+	screencastFrames++;
 	const ms = at();
 	const file = nextFramePath(ms);
 	writeFileSync(file, Buffer.from(data, "base64"));
@@ -172,6 +174,14 @@ log("end", page.url());
 timeline.sort((a, b) => parseInt(a) - parseInt(b));
 writeFileSync(join(outDir, "timeline.txt"), timeline.join("\n") + "\n");
 console.log(`\n${n} frames -> ${outDir}`);
+if (screencastFrames === 0) {
+	console.error(
+		"! no repaint-driven frames arrived: the Chrome window is likely hidden " +
+			"(unfocused workspace / minimized), which stops rendering entirely. Only " +
+			"fixed-interval snapshots were captured, and they may show stale pixels. " +
+			"Make the Chrome window visible and record again.",
+	);
+}
 console.log(`timeline -> ${join(outDir, "timeline.txt")}`);
 
 // Encode with real per-frame durations so playback speed matches reality,

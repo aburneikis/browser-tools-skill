@@ -31,7 +31,7 @@ All scripts live in `{baseDir}/`.
 | `browser-nav.js <url> [--new] [--reload]` | Navigate; `--new` opens a new tab; `--reload` forces a reload after navigating. |
 | `browser-eval.js '<js>'` | Run JS in the active tab (async context). |
 | `browser-type.js <sel> <text> [--enter] [--pick-suggestion [sel]] [--delay ms]` | Real keyboard events (waits for selector, clears existing value). Prefer over setting `input.value` via eval - frameworks and autocompletes need real events. Default suggestion selector handles Google Places. |
-| `browser-screenshot.js [--full] [--selector S] [path]` | Capture viewport/page/element; prints file path. `--selector` captures by absolute page coordinates, so it does not scroll the page and works when the window is hidden. |
+| `browser-screenshot.js [--full] [--selector S] [path]` | Capture viewport/page/element; prints file path. |
 | `browser-record.js ...` | Record transitions - see below. |
 | `browser-emulate.js mobile\|tablet\|desktop\|WxH\|reset\|--offline\|--online` | Viewport/device/network emulation. Viewport overrides persist after exit; user-agent does not. |
 | `browser-pick.js "<prompt>"` | Interactive element picker: the user clicks elements (Cmd/Ctrl+Click for multiple, Enter when done); returns CSS selectors. Use whenever the user wants to point at elements on the page. |
@@ -58,7 +58,7 @@ A screenshot taken after an action almost always misses the transient moment (sp
 {baseDir}/browser-record.js --none --wait-enter --video /tmp/demo.mp4   # record until Enter (needs a tty - run it yourself)
 ```
 
-Output is a dir of `frame-NNNN-<ms>ms.png` plus `timeline.txt` interleaving frames with navigated/load/dialog/console-error events - read specific frames with the read tool. Add `--video [file.mp4]` or `--gif [file.gif]` to encode with ffmpeg (frames deleted after encode unless `--keep-frames`). The recording covers the CDP tab only, but it **needs the window to be visible**: it is driven by `Page.screencastFrame`, and a hidden window delivers no frames at all (measured: zero frames in 60 s). Put the Chrome window on the focused workspace before recording.
+Output is a dir of `frame-NNNN-<ms>ms.png` plus `timeline.txt` interleaving frames with navigated/load/dialog/console-error events - read specific frames with the read tool. Add `--video [file.mp4]` or `--gif [file.gif]` to encode with ffmpeg (frames deleted after encode unless `--keep-frames`). The recording covers the CDP tab only.
 
 Always trigger the action via `--click/--eval/--nav` in the same invocation - clicking in one command and recording in another reintroduces the race. Recording dirs land in `$TMPDIR` (`--out <dir>` to control; see clean-up above).
 
@@ -70,14 +70,4 @@ Always trigger the action via `--click/--eval/--nav` in the same invocation - cl
 - For layout/truncation bugs: `browser-emulate.js 760x760`, read computed styles via eval, then `browser-screenshot.js --selector`.
 - Investigate page structure (title, forms, buttons, inputs) with one eval before interacting.
 - Before taking a port, check it: `browser-status.js --port N` for CDP ports, `ss -ltnp "sport = :7766"` for anything else.
-
-## Hidden windows stall anything that waits for a frame
-
-On a tiling WM a window on an unfocused workspace has an unmapped surface, so the page renders no frames. Anything that waits on rendering then blocks until you switch back to that workspace - typically seen as a command that hangs for minutes and finishes the instant the window appears.
-
-What this hits, and what to do:
-
-- **`IntersectionObserver` never fires.** This is the usual culprit, because puppeteer's `ElementHandle.screenshot/click/type` call `scrollIntoViewIfNeeded()`, which awaits an observer callback. `browser-screenshot.js --selector` no longer uses that path; `browser-click`/`browser-type` on an off-screen element still can, so make the window visible for those.
-- **Scrolling does not repaint.** Scrolling and then capturing returns pixels from the pre-scroll position - a silently wrong screenshot, not an error. Never scroll-then-capture while hidden; capture absolute coordinates instead.
-- **Screencast delivers nothing**, so `browser-record.js` needs a visible window.
-- **`Page.captureScreenshot` itself is fine** (sub-second when hidden), which is why plain viewport and `--full` screenshots and all `browser-eval.js` DOM reads are unaffected.
+- If a browser command hangs for a long time and then finishes suddenly, suspect a hidden Chrome window (rendering is paused); make it visible and retry.
