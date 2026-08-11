@@ -11,7 +11,7 @@ Scripts that drive Chrome via CDP on `:9222` (override with `CDP_PORT`).
 
 Run once before first use: `cd {baseDir} && npm install`
 
-For anything the scripts do not cover, write a scratch script next to them reusing the shared helpers, and delete it when done:
+For anything the scripts do not cover, write a scratch script in `{baseDir}/scripts/` reusing the shared helpers, and delete it when done:
 
 ```js
 import { connect, activePage, sleep } from "./lib.mjs";
@@ -22,7 +22,7 @@ await browser.disconnect();
 
 ## Commands
 
-All scripts live in `{baseDir}/`.
+All scripts live in `{baseDir}/scripts/`.
 
 | Script | Usage / notes |
 |---|---|
@@ -51,11 +51,11 @@ Stop an instance with `pkill -f 'remote-debugging-port=<port>'`. If you started 
 A screenshot taken after an action almost always misses the transient moment (spinner gone, toast faded, redirects finished). `browser-record.js` starts capturing before performing the action, in the same process:
 
 ```bash
-{baseDir}/browser-record.js --click 'button[type=submit]' --duration 6 --fps 8
-{baseDir}/browser-record.js --nav https://example.com/login --duration 4
-{baseDir}/browser-record.js --eval '<js that triggers the transition>'
-{baseDir}/browser-record.js --none --duration 10                        # user drives, you record
-{baseDir}/browser-record.js --none --wait-enter --video /tmp/demo.mp4   # record until Enter (needs a tty - run it yourself)
+{baseDir}/scripts/browser-record.js --click 'button[type=submit]' --duration 6 --fps 8
+{baseDir}/scripts/browser-record.js --nav https://example.com/login --duration 4
+{baseDir}/scripts/browser-record.js --eval '<js that triggers the transition>'
+{baseDir}/scripts/browser-record.js --none --duration 10                        # user drives, you record
+{baseDir}/scripts/browser-record.js --none --wait-enter --video /tmp/demo.mp4   # record until Enter (needs a tty - run it yourself)
 ```
 
 Output is a dir of `frame-NNNN-<ms>ms.png` plus `timeline.txt` interleaving frames with navigated/load/dialog/console-error events - read specific frames with the read tool. Add `--video [file.mp4]` or `--gif [file.gif]` to encode with ffmpeg (frames deleted after encode unless `--keep-frames`). The recording covers the CDP tab only.
