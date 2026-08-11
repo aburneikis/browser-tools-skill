@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import puppeteer from "puppeteer-core";
+import { connect, allPages } from "./lib.mjs";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
@@ -24,20 +24,10 @@ if (!url) {
 	process.exit(1);
 }
 
-const b = await Promise.race([
-	puppeteer.connect({
-		browserURL: `http://localhost:${process.env.CDP_PORT || 9222}`,
-		defaultViewport: null,
-	}),
-	new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
-]).catch((e) => {
-	console.error("✗ Could not connect to browser:", e.message);
-	console.error("  Run: browser-start.js");
-	process.exit(1);
-});
+const b = await connect();
 
-const allPages = await b.pages();
-const p = allPages.filter(p => !p.url().startsWith("chrome://") && !p.url().startsWith("chrome-extension://")).at(-1);
+const allPagesList = await allPages(b);
+const p = allPagesList.filter(p => !p.url().startsWith("chrome://") && !p.url().startsWith("chrome-extension://")).at(-1);
 if (!p) {
 	console.error("✗ No active tab found");
 	process.exit(1);

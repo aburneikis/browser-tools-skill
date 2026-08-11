@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { connect } from "./lib.mjs";
+import { connect, allPages } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const newTab = args.includes("--new");
@@ -30,12 +30,12 @@ const navigate = async (page) => {
 };
 
 // Get only real page tabs (exclude service workers, extensions, chrome:// internal pages)
-const allPages = await b.pages();
-const pages = allPages.filter(p => {
+const allPagesList = await allPages(b);
+const pages = allPagesList.filter(p => {
 	const u = p.url();
 	return !u.startsWith("chrome-extension://") && !u.startsWith("chrome://") && !u.includes("fbsbx.com");
 });
-const foregroundPage = pages.at(0) ?? allPages.at(-1);
+const foregroundPage = pages.at(0) ?? allPagesList.at(-1);
 
 if (newTab) {
 	const p = await b.newPage();
