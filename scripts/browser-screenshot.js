@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { writeFile } from "node:fs/promises";
-import { connect, activePage, tmpPath } from "./lib.mjs";
+import { connect, activePage, tmpPath, withTimeout } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 let fullPage = false;
@@ -54,16 +54,11 @@ async function captureByClip(el) {
 
 if (selector) {
 	const el = await p.waitForSelector(selector, { timeout: 10000 });
-	let timer;
-	const timeout = new Promise((r) => {
-		timer = setTimeout(() => r("timeout"), 5000);
-		timer.unref();
-	});
-	const result = await Promise.race([
+	const result = await withTimeout(
 		el.screenshot({ path: filepath }).then(() => "ok", () => "error"),
-		timeout,
-	]);
-	clearTimeout(timer);
+		5000,
+		() => "timeout",
+	);
 	if (result !== "ok") await captureByClip(el);
 } else {
 	await p.screenshot({ path: filepath, fullPage });

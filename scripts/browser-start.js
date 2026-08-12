@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, execSync } from "node:child_process";
+import { mkdirSync, rmSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const useProfile = args.includes("--profile");
@@ -46,13 +47,12 @@ if (await isUp()) {
 	process.exit(0);
 }
 
-// Setup profile directory
-execSync(`mkdir -p "${SCRAPING_DIR}"`, { stdio: "ignore" });
+mkdirSync(SCRAPING_DIR, { recursive: true });
 
-// Remove SingletonLock to allow new instance
-try {
-	execSync(`rm -f "${SCRAPING_DIR}/SingletonLock" "${SCRAPING_DIR}/SingletonSocket" "${SCRAPING_DIR}/SingletonCookie"`, { stdio: "ignore" });
-} catch {}
+// Stale singleton files block a new instance after an unclean shutdown.
+for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) {
+	rmSync(`${SCRAPING_DIR}/${f}`, { force: true });
+}
 
 if (useProfile) {
 	console.log("Syncing profile...");

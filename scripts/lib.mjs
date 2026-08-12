@@ -64,13 +64,19 @@ async function openBlankTab() {
 	}
 }
 
+function exitWithRestartHint(message) {
+	console.error(`\u2717 ${message}`);
+	console.error(`  Restart it: pkill -f '[r]emote-debugging-port=${CDP_PORT}' && browser-start.js`);
+	process.exit(1);
+}
+
 async function closeTab(tab) {
 	console.error(`⚠ Closing unattachable tab: ${tab.url.slice(0, 80)}`);
 	await fetch(`${BROWSER_URL}/json/close/${tab.id}`, { signal: AbortSignal.timeout(3000) }).catch(() => {});
 }
 
 /** Race a promise against a timer that can never hold the process open. */
-function withTimeout(promise, ms, onTimeout = () => null) {
+export function withTimeout(promise, ms, onTimeout = () => null) {
 	let timer;
 	return Promise.race([
 		promise,
@@ -122,9 +128,7 @@ export async function connect(timeoutMs = CONNECT_TIMEOUT) {
 	const wedged = await findWedgedTabs(tabs, PROBE_TIMEOUT);
 	if (wedged.length === 0) {
 		console.error(`✗ Could not connect to browser: timeout after ${timeoutMs}ms`);
-		console.error("  The browser answers CDP but no tab could be attached.");
-		console.error("  Restart it: pkill -f '[r]emote-debugging-port=" + CDP_PORT + "' && browser-start.js");
-		process.exit(1);
+		exitWithRestartHint("The browser answers CDP but no tab could be attached.");
 	}
 
 	if (wedged.length === tabs.length) await openBlankTab();
@@ -133,9 +137,7 @@ export async function connect(timeoutMs = CONNECT_TIMEOUT) {
 	const recovered = await tryConnect(timeoutMs);
 	if (recovered) return recovered;
 
-	console.error("✗ Could not connect to browser after closing wedged tabs");
-	console.error("  Restart it: pkill -f '[r]emote-debugging-port=" + CDP_PORT + "' && browser-start.js");
-	process.exit(1);
+	exitWithRestartHint("Could not connect to browser after closing wedged tabs");
 }
 
 /**
@@ -163,14 +165,17 @@ export async function allPages(browser) {
 		.map((r) => r.page);
 }
 
+/** Tabs a user actually sees, as opposed to browser-internal pages. */
+export function isUserTab(url) {
+	return !url.startsWith("chrome://") && !url.startsWith("chrome-extension://");
+}
+
 /**
  * Pick the page to act on: the most recently used real tab.
  * Pass a substring (e.g. "localhost:7766") to prefer a matching tab.
  */
 export async function activePage(browser, match) {
-	const pages = (await allPages(browser)).filter(
-		(p) => !p.url().startsWith("chrome://") && !p.url().startsWith("chrome-extension://"),
-	);
+	const pages = (await allPages(browser)).filter((p) => isUserTab(p.url()));
 	const page = (match && pages.find((p) => p.url().includes(match))) || pages.at(-1);
 	if (page) return page;
 
@@ -178,9 +183,7 @@ export async function activePage(browser, match) {
 	// tab would quit Chrome - then drop the broken ones.
 	const broken = (await pageTargets()) ?? [];
 	if (!(await openBlankTab())) {
-		console.error("✗ No usable tab found and could not open a new one");
-		console.error(`  Restart it: pkill -f '[r]emote-debugging-port=${CDP_PORT}' && browser-start.js`);
-		process.exit(1);
+		exitWithRestartHint("No usable tab found and could not open a new one");
 	}
 	for (const tab of broken) await closeTab(tab);
 	console.error("⚠ Opened a fresh blank tab to recover.");
@@ -190,9 +193,7 @@ export async function activePage(browser, match) {
 		const p = await target.page().catch(() => null);
 		if (p) return p;
 	}
-	console.error("✗ No usable tab found");
-	console.error(`  Restart it: pkill -f '[r]emote-debugging-port=${CDP_PORT}' && browser-start.js`);
-	process.exit(1);
+	exitWithRestartHint("No usable tab found");
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -6,9 +6,8 @@ import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 
-// Global timeout - exit if script takes too long
 const TIMEOUT = 30000;
-const timeoutId = setTimeout(() => {
+setTimeout(() => {
 	console.error("✗ Timeout after 30s");
 	process.exit(1);
 }, TIMEOUT).unref();
@@ -40,12 +39,10 @@ await client.detach();
 
 const finalUrl = p.url();
 
-// Extract with Readability
 const doc = new JSDOM(outerHTML, { url: finalUrl });
 const reader = new Readability(doc.window.document);
 const article = reader.parse();
 
-// Convert to markdown
 function htmlToMarkdown(html) {
 	const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
 	turndown.use(gfm);
@@ -67,7 +64,7 @@ let content;
 if (article && article.content) {
 	content = htmlToMarkdown(article.content);
 } else {
-	// Fallback
+	// Re-parse: Readability mutates the first document.
 	const fallbackDoc = new JSDOM(outerHTML, { url: finalUrl });
 	const fallbackBody = fallbackDoc.window.document;
 	fallbackBody.querySelectorAll("script, style, noscript, nav, header, footer, aside").forEach((el) => el.remove());

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { connect, allPages } from "./lib.mjs";
+import { connect, allPages, isUserTab } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const newTab = args.includes("--new");
@@ -29,12 +29,8 @@ const navigate = async (page) => {
 	}
 };
 
-// Get only real page tabs (exclude service workers, extensions, chrome:// internal pages)
 const pages = await allPages(b);
-const realPages = pages.filter(p => {
-	const u = p.url();
-	return !u.startsWith("chrome-extension://") && !u.startsWith("chrome://") && !u.includes("fbsbx.com");
-});
+const realPages = pages.filter((p) => isUserTab(p.url()) && !p.url().includes("fbsbx.com"));
 const foregroundPage = realPages.at(0) ?? pages.at(-1);
 if (!newTab && !foregroundPage) {
 	console.error("✗ No usable tab found");
