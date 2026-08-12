@@ -9,7 +9,7 @@ import { gfm } from "turndown-plugin-gfm";
 const SCRIPT_TIMEOUT = 30000;
 const NAV_TIMEOUT = 10000;
 setTimeout(() => {
-	console.error("✗ Timeout after 30s");
+	console.error(`✗ Timeout after ${SCRIPT_TIMEOUT / 1000}s`);
 	process.exit(1);
 }, SCRIPT_TIMEOUT).unref();
 

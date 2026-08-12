@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { readdirSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { isChromeUp } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
@@ -49,17 +50,6 @@ const human = (b) => {
 	return `${b.toFixed(b < 10 && i ? 1 : 0)}${u[i]}`;
 };
 
-const isLive = async (port) => {
-	try {
-		const r = await fetch(`http://localhost:${port}/json/version`, {
-			signal: AbortSignal.timeout(500),
-		});
-		return r.ok;
-	} catch {
-		return false;
-	}
-};
-
 const targets = [];
 let skipped = 0;
 
@@ -97,7 +87,7 @@ if (!onlyTmp) {
 		}
 		const port = isDefault ? 9222 : name.split("-").at(-1);
 		const p = join(cache, name);
-		if (await isLive(port)) {
+		if (await isChromeUp(port, 500)) {
 			console.log(`live      keep   :${port}  ${p}`);
 			continue;
 		}

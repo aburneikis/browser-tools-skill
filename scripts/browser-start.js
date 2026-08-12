@@ -2,6 +2,7 @@
 
 import { spawn, execSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
+import { isChromeUp } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const useProfile = args.includes("--profile");
@@ -31,18 +32,7 @@ const PROFILE_DIR =
 		? `${process.env.HOME}/.cache/browser-tools`
 		: `${process.env.HOME}/.cache/browser-tools-${CDP_PORT}`;
 
-const isUp = async () => {
-	try {
-		const res = await fetch(`http://localhost:${CDP_PORT}/json/version`, {
-			signal: AbortSignal.timeout(2000),
-		});
-		return res.ok;
-	} catch {
-		return false;
-	}
-};
-
-if (await isUp()) {
+if (await isChromeUp(CDP_PORT)) {
 	console.log(`✓ Chrome already running on :${CDP_PORT}`);
 	process.exit(0);
 }
@@ -107,7 +97,7 @@ spawn(
 // Wait for Chrome to be ready
 let connected = false;
 for (let i = 0; i < 30 && !connected; i++) {
-	connected = await isUp();
+	connected = await isChromeUp(CDP_PORT);
 	if (!connected) await new Promise((r) => setTimeout(r, 500));
 }
 

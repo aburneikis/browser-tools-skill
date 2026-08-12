@@ -5,6 +5,18 @@ import puppeteer from "puppeteer-core";
 
 export const CDP_PORT = process.env.CDP_PORT || 9222;
 
+/** True if a debuggable Chrome answers on the given port. */
+export async function isChromeUp(port, timeoutMs = 2000) {
+	try {
+		const res = await fetch(`http://localhost:${port}/json/version`, {
+			signal: AbortSignal.timeout(timeoutMs),
+		});
+		return res.ok;
+	} catch {
+		return false;
+	}
+}
+
 const BROWSER_URL = `http://localhost:${CDP_PORT}`;
 // Floored: the wedged-tab heuristic below infers a fault from a failed connect,
 // so an impatient timeout must not be mistaken for a broken tab.
@@ -65,7 +77,7 @@ async function openBlankTab() {
 }
 
 function exitWithRestartHint(message) {
-	console.error(`\u2717 ${message}`);
+	console.error(`✗ ${message}`);
 	console.error(`  Restart it: pkill -f '[r]emote-debugging-port=${CDP_PORT}' && browser-start.js`);
 	process.exit(1);
 }

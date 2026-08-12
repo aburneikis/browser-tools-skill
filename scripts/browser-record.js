@@ -186,15 +186,14 @@ console.log(`timeline -> ${join(outDir, "timeline.txt")}`);
 
 // Encode with real per-frame durations so playback speed matches reality,
 // letterboxing to the first frame's size (viewport/DPR changes mid-record are possible).
+frames.sort((a, b) => a.ms - b.ms);
+
 function encode(target, isGif) {
-	frames.sort((a, b) => a.ms - b.ms);
 	if (frames.length < 2) {
 		console.error("✗ not enough frames to encode");
 		return null;
 	}
-	const out =
-		target ||
-		join(outDir, isGif ? "recording.gif" : "recording.mp4");
+	const out = target || join(outDir, isGif ? "recording.gif" : "recording.mp4");
 	const probe = execFileSync("ffprobe", [
 		"-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=width,height", "-of", "csv=p=0:s=x",
