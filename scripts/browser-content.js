@@ -6,11 +6,12 @@ import { JSDOM } from "jsdom";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 
-const TIMEOUT = 30000;
+const SCRIPT_TIMEOUT = 30000;
+const NAV_TIMEOUT = 10000;
 setTimeout(() => {
 	console.error("✗ Timeout after 30s");
 	process.exit(1);
-}, TIMEOUT).unref();
+}, SCRIPT_TIMEOUT).unref();
 
 const url = process.argv[2];
 
@@ -23,21 +24,21 @@ if (!url) {
 	process.exit(1);
 }
 
-const b = await connect();
-const p = await activePage(b);
+const browser = await connect();
+const page = await activePage(browser);
 
 await Promise.race([
-	p.goto(url, { waitUntil: "networkidle2" }),
-	new Promise((r) => setTimeout(r, 10000)),
+	page.goto(url, { waitUntil: "networkidle2" }),
+	new Promise((r) => setTimeout(r, NAV_TIMEOUT)),
 ]).catch(() => {});
 
 // Get HTML via CDP (works even with TrustedScriptURL restrictions)
-const client = await p.createCDPSession();
+const client = await page.createCDPSession();
 const { root } = await client.send("DOM.getDocument", { depth: -1, pierce: true });
 const { outerHTML } = await client.send("DOM.getOuterHTML", { nodeId: root.nodeId });
 await client.detach();
 
-const finalUrl = p.url();
+const finalUrl = page.url();
 
 const doc = new JSDOM(outerHTML, { url: finalUrl });
 const reader = new Readability(doc.window.document);

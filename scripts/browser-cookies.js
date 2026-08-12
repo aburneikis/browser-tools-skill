@@ -2,11 +2,10 @@
 
 import { connect, activePage } from "./lib.mjs";
 
-const b = await connect();
+const browser = await connect();
+const page = await activePage(browser);
 
-const p = await activePage(b);
-
-const cookies = await p.cookies();
+const cookies = await page.cookies();
 
 for (const cookie of cookies) {
 	console.log(`${cookie.name}: ${cookie.value}`);
@@ -17,4 +16,4 @@ for (const cookie of cookies) {
 	console.log("");
 }
 
-await b.disconnect();
+await browser.disconnect();

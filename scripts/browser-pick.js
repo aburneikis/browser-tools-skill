@@ -10,18 +10,19 @@ if (!message) {
 	process.exit(1);
 }
 
-const b = await connect();
-
-const p = await activePage(b);
+const browser = await connect();
+const page = await activePage(browser);
 
 // Inject pick() helper into current page
-await p.evaluate(() => {
+await page.evaluate(() => {
 	if (!window.pick) {
 		window.pick = async (message) => {
 			if (!message) {
 				throw new Error("pick() requires a message parameter");
 			}
 			return new Promise((resolve) => {
+				const HIGHLIGHT_STYLE =
+					"position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);transition:all 0.1s";
 				const selections = [];
 				const selectedElements = new Set();
 
@@ -30,8 +31,7 @@ await p.evaluate(() => {
 					"position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483647;pointer-events:none";
 
 				const highlight = document.createElement("div");
-				highlight.style.cssText =
-					"position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);transition:all 0.1s";
+				highlight.style.cssText = HIGHLIGHT_STYLE;
 				overlay.appendChild(highlight);
 
 				const banner = document.createElement("div");
@@ -60,7 +60,7 @@ await p.evaluate(() => {
 					const el = document.elementFromPoint(e.clientX, e.clientY);
 					if (!el || overlay.contains(el) || banner.contains(el)) return;
 					const r = el.getBoundingClientRect();
-					highlight.style.cssText = `position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);top:${r.top}px;left:${r.left}px;width:${r.width}px;height:${r.height}px`;
+					highlight.style.cssText = `${HIGHLIGHT_STYLE};top:${r.top}px;left:${r.left}px;width:${r.width}px;height:${r.height}px`;
 				};
 
 				const buildElementInfo = (el) => {
@@ -127,6 +127,6 @@ await p.evaluate(() => {
 	}
 });
 
-printResult(await p.evaluate((msg) => window.pick(msg), message));
+printResult(await page.evaluate((msg) => window.pick(msg), message));
 
-await b.disconnect();
+await browser.disconnect();

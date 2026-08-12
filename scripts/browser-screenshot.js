@@ -17,8 +17,8 @@ for (let i = 0; i < args.length; i++) {
 	} else out = args[i];
 }
 
-const b = await connect();
-const p = await activePage(b);
+const browser = await connect();
+const page = await activePage(browser);
 
 const filepath = out || tmpPath("screenshot", ".png");
 
@@ -42,7 +42,7 @@ async function captureByClip(el) {
 		console.error(`\u2717 '${selector}' has a zero-sized box (hidden?), nothing to capture`);
 		process.exit(1);
 	}
-	const session = await p.createCDPSession();
+	const session = await page.createCDPSession();
 	const { data } = await session.send("Page.captureScreenshot", {
 		format: "png",
 		captureBeyondViewport: true,
@@ -53,7 +53,7 @@ async function captureByClip(el) {
 }
 
 if (selector) {
-	const el = await p.waitForSelector(selector, { timeout: 10000 });
+	const el = await page.waitForSelector(selector, { timeout: 10000 });
 	const result = await withTimeout(
 		el.screenshot({ path: filepath }).then(() => "ok", () => "error"),
 		5000,
@@ -61,9 +61,9 @@ if (selector) {
 	);
 	if (result !== "ok") await captureByClip(el);
 } else {
-	await p.screenshot({ path: filepath, fullPage });
+	await page.screenshot({ path: filepath, fullPage });
 }
 
 console.log(filepath);
 
-await b.disconnect();
+await browser.disconnect();

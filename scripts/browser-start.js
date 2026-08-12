@@ -26,7 +26,7 @@ const CDP_PORT = Number(process.env.CDP_PORT || 9222);
 // Per-port profile dir: Chrome allows only one instance per user-data-dir
 // (SingletonLock), so each CDP port needs its own. Port 9222 keeps the
 // historical un-suffixed dir for backwards compatibility.
-const SCRAPING_DIR =
+const PROFILE_DIR =
 	CDP_PORT === 9222
 		? `${process.env.HOME}/.cache/browser-tools`
 		: `${process.env.HOME}/.cache/browser-tools-${CDP_PORT}`;
@@ -47,11 +47,11 @@ if (await isUp()) {
 	process.exit(0);
 }
 
-mkdirSync(SCRAPING_DIR, { recursive: true });
+mkdirSync(PROFILE_DIR, { recursive: true });
 
 // Stale singleton files block a new instance after an unclean shutdown.
 for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) {
-	rmSync(`${SCRAPING_DIR}/${f}`, { force: true });
+	rmSync(`${PROFILE_DIR}/${f}`, { force: true });
 }
 
 if (useProfile) {
@@ -78,7 +78,7 @@ if (useProfile) {
 			--exclude='*/Current Tabs' \
 			--exclude='*/Last Session' \
 			--exclude='*/Last Tabs' \
-			"${process.env.HOME}/.config/google-chrome/" "${SCRAPING_DIR}/"`,
+			"${process.env.HOME}/.config/google-chrome/" "${PROFILE_DIR}/"`,
 		{ stdio: "pipe" },
 	);
 }
@@ -88,7 +88,7 @@ spawn(
 	"google-chrome",
 	[
 		`--remote-debugging-port=${CDP_PORT}`,
-		`--user-data-dir=${SCRAPING_DIR}`,
+		`--user-data-dir=${PROFILE_DIR}`,
 		"--no-first-run",
 		"--profile-directory=Default",
 		"about:blank",

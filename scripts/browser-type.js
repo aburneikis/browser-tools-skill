@@ -53,9 +53,9 @@ await inPage((s) => {
 
 await page.keyboard.type(text, { delay });
 
-// Commit the value: controls bound with Angular's `updateOn: 'blur'` (common in
-// this codebase) only write to the model on blur, so without this the DOM shows
-// the text while the form model stays empty and submits blank.
+// Commit the value: controls bound with `updateOn: 'blur'` (Angular) only write
+// to the model on blur, so without this the DOM shows the text while the form
+// model stays empty and submits blank.
 if (!pickSuggestion && !enter) {
 	await inPage((s) => {
 		const node = document.querySelector(s);

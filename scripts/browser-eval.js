@@ -11,10 +11,9 @@ if (!code) {
 	process.exit(1);
 }
 
-const b = await connect();
+const browser = await connect();
+const page = await activePage(browser);
 
-const p = await activePage(b);
+printResult(await evalAsync(page, code));
 
-printResult(await evalAsync(p, code));
-
-await b.disconnect();
+await browser.disconnect();

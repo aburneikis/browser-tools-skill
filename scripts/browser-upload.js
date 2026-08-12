@@ -28,13 +28,13 @@ for (const f of absFiles) {
 	}
 }
 
-const b = await connect();
-const p = await activePage(b);
+const browser = await connect();
+const page = await activePage(browser);
 
-const handle = await p.$(selector);
+const handle = await page.$(selector);
 if (!handle) {
 	console.error(`No element matched selector: ${selector}`);
-	await b.disconnect();
+	await browser.disconnect();
 	process.exit(1);
 }
 
@@ -49,13 +49,13 @@ if (tagInfo.tag !== "INPUT" || tagInfo.type !== "file") {
 		`Element is <${tagInfo.tag.toLowerCase()} type="${tagInfo.type}">, not <input type="file">. ` +
 			`File uploads only work on real file inputs (often hidden inside dropzone components).`,
 	);
-	await b.disconnect();
+	await browser.disconnect();
 	process.exit(1);
 }
 
 if (absFiles.length > 1 && !tagInfo.multiple) {
 	console.error("Input does not have the 'multiple' attribute; cannot attach more than one file.");
-	await b.disconnect();
+	await browser.disconnect();
 	process.exit(1);
 }
 
@@ -71,4 +71,4 @@ await handle.evaluate((el) => {
 console.log(`Uploaded ${absFiles.length} file(s) to ${selector}:`);
 for (const f of absFiles) console.log("  " + f);
 
-await b.disconnect();
+await browser.disconnect();

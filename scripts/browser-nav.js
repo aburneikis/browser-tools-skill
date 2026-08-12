@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { connect, allPages, isUserTab } from "./lib.mjs";
+import { connect, activePage } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const newTab = args.includes("--new");
@@ -16,7 +16,7 @@ if (!url) {
 	process.exit(1);
 }
 
-const b = await connect();
+const browser = await connect();
 
 const navigate = async (page) => {
 	try {
@@ -29,26 +29,19 @@ const navigate = async (page) => {
 	}
 };
 
-const pages = await allPages(b);
-const realPages = pages.filter((p) => isUserTab(p.url()) && !p.url().includes("fbsbx.com"));
-const foregroundPage = realPages.at(0) ?? pages.at(-1);
-if (!newTab && !foregroundPage) {
-	console.error("✗ No usable tab found");
-	process.exit(1);
-}
-
 if (newTab) {
-	const p = await b.newPage();
-	await navigate(p);
-	await p.bringToFront();
+	const page = await browser.newPage();
+	await navigate(page);
+	await page.bringToFront();
 	console.log("✓ Opened:", url);
 } else {
-	await navigate(foregroundPage);
+	const page = await activePage(browser);
+	await navigate(page);
 	if (reload) {
-		await foregroundPage.reload({ waitUntil: "domcontentloaded" });
+		await page.reload({ waitUntil: "domcontentloaded" });
 	}
-	await foregroundPage.bringToFront();
+	await page.bringToFront();
 	console.log("✓ Navigated to:", url);
 }
 
-await b.disconnect();
+await browser.disconnect();
