@@ -29,7 +29,8 @@ All scripts live in `{baseDir}/scripts/`.
 | `browser-start.js [--profile] [--no-extensions]` | Launch Chrome with remote debugging. `--profile` copies the user's profile (cookies, logins). Idempotent per port. |
 | `browser-status.js [--port N]` | List debuggable Chrome instances + tabs. With `--port`: exit 0 if running, 1 if free. |
 | `browser-nav.js <url> [--new] [--reload]` | Navigate; `--new` opens a new tab; `--reload` forces a reload after navigating. |
-| `browser-eval.js '<js>'` | Run JS in the active tab (async context). |
+| `browser-eval.js '<js>'` | Run JS in the active tab (async context). Nested objects/arrays are JSON-serialised in the output. |
+| `browser-network.js [action] [opts]` | Log requests while acting - see below. |
 | `browser-type.js <sel> <text> [--enter] [--pick-suggestion [sel]] [--delay ms]` | Real keyboard events (waits for selector, clears existing value). Prefer over setting `input.value` via eval - frameworks and autocompletes need real events. Default suggestion selector handles Google Places. |
 | `browser-screenshot.js [--full] [--selector S] [path]` | Capture viewport/page/element; prints file path. |
 | `browser-record.js ...` | Record transitions - see below. |
@@ -45,6 +46,24 @@ All scripts live in `{baseDir}/scripts/`.
 Each `CDP_PORT` gets its own Chrome and profile dir (`~/.cache/browser-tools-<port>`), so several browsers can run and be driven simultaneously. All commands for one instance must use the same `CDP_PORT`.
 
 Stop an instance with `pkill -f 'remote-debugging-port=<port>'`. If you started Chrome solely for a one-off task, ask the user before stopping it. Profile dirs (200-700 MB each) are never deleted automatically - run `browser-clean.js` after sessions that spun up extra ports.
+
+## Network: what did that action request?
+
+`browser-network.js` starts listening, performs one action, then reports `status method url`.
+Use it for "did the button hit the endpoint, and what came back?" and for pages that hang.
+
+```bash
+{baseDir}/scripts/browser-network.js --click 'UPGRADE' --filter escalate.php --body
+{baseDir}/scripts/browser-network.js --nav https://host/messages --failures
+{baseDir}/scripts/browser-network.js --none --duration 15 --failures   # user drives
+```
+
+Actions: `--nav <url>`, `--reload`, `--click <sel-or-button-text>`, `--eval '<js>'`, `--none`.
+Options: `--filter <substr>`, `--failures` (status >= 400 plus failed requests), `--body`,
+`--duration <s>` (default 6), `--json`.
+
+As with recording, trigger the action inside the same invocation - clicking in a separate
+command loses the requests.
 
 ## Record transitions (spinners, toasts, redirects)
 
@@ -65,6 +84,8 @@ Always trigger the action via `--click/--eval/--nav` in the same invocation - cl
 ## Guidelines
 
 - Prefer DOM reads (`browser-eval.js`) over screenshots for reading state; screenshots are for visual verification and layout bugs.
+- `--selector` screenshots come back blank for elements that are offscreen, inside a scroll container, or mid-animation. Scroll first, tag the node, let it settle, then shoot:
+  `browser-eval.js '(() => { const el = ...; el.scrollIntoView({block:"center"}); el.setAttribute("data-shot","1"); return "ok"; })()'`, `sleep 2`, `browser-screenshot.js --selector '[data-shot="1"]'`. Falling back to a viewport screenshot is often faster than fighting this.
 - Batch multi-step JS into one `browser-eval.js` call (IIFE returning JSON) instead of many round trips.
 - For transient state, do not sleep-then-look: use `browser-record.js`, or latch inside the page with a MutationObserver (that dies on navigation - then record instead).
 - For layout/truncation bugs: `browser-emulate.js 760x760`, read computed styles via eval, then `browser-screenshot.js --selector`.

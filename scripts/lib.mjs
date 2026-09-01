@@ -218,10 +218,23 @@ export function evalAsync(page, code) {
 	}, code);
 }
 
-/** Print an eval result: arrays as blocks of key: value, objects as key: value, scalars as-is. */
+/**
+ * Print an eval result: arrays as blocks of key: value, objects as key: value, scalars as-is.
+ *
+ * Nested objects and arrays are JSON-serialised rather than stringified, so a returned
+ * value never degrades into "[object Object]".
+ */
 export function printResult(result) {
+	const show = (value) => {
+		if (typeof value !== "object" || value === null) return String(value);
+		try {
+			return JSON.stringify(value);
+		} catch {
+			return String(value);
+		}
+	};
 	const printEntries = (obj) => {
-		for (const [key, value] of Object.entries(obj)) console.log(`${key}: ${value}`);
+		for (const [key, value] of Object.entries(obj)) console.log(`${key}: ${show(value)}`);
 	};
 	if (Array.isArray(result)) {
 		result.forEach((item, i) => {
