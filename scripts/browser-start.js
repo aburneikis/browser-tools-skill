@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, execSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { isChromeUp } from "./lib.mjs";
 
 const args = process.argv.slice(2);
@@ -73,6 +73,25 @@ if (useProfile) {
 	);
 }
 
+disablePasswordManager(`${PROFILE_DIR}/Default/Preferences`);
+
+function disablePasswordManager(prefsPath) {
+	mkdirSync(`${PROFILE_DIR}/Default`, { recursive: true });
+	let prefs = {};
+	if (existsSync(prefsPath)) {
+		try {
+			prefs = JSON.parse(readFileSync(prefsPath, "utf8"));
+		} catch {
+			prefs = {};
+		}
+	}
+	prefs.credentials_enable_service = false;
+	prefs.credentials_enable_autosignin = false;
+	prefs.profile = { ...prefs.profile, password_manager_leak_detection: false };
+	prefs.autofill = { ...prefs.autofill, credit_card_enabled: false, profile_enabled: false };
+	writeFileSync(prefsPath, JSON.stringify(prefs));
+}
+
 // Start Chrome with flags to force new instance
 spawn(
 	"google-chrome",
@@ -83,6 +102,9 @@ spawn(
 		"--profile-directory=Default",
 		"about:blank",
 		"--no-default-browser-check",
+		// Keep Google Password Manager / keyring out of the way
+		"--password-store=basic",
+		"--disable-features=PasswordManagerOnboarding,PasswordLeakDetection,AutofillServerCommunication",
 		...(noExtensions ? ["--disable-extensions"] : []),
 		"--ozone-platform=wayland",
 		// WebGL support
