@@ -21,7 +21,7 @@ npm install
 ## Quick start
 
 ```bash
-scripts/browser-start.js --profile     # launch Chrome with remote debugging
+scripts/browser-start.js --profile     # launch headless Chrome (--headed for a window)
 scripts/browser-nav.js https://example.com
 scripts/browser-eval.js 'document.title'
 scripts/browser-screenshot.js
@@ -35,7 +35,7 @@ its own Chrome instance and profile dir, so several browsers can run at once.
 
 | Script | Purpose |
 |---|---|
-| `browser-start.js` | Launch Chrome with remote debugging (`--profile` clones your real profile) |
+| `browser-start.js` | Launch Chrome with remote debugging, headless unless `--headed` (`--profile` clones your real profile) |
 | `browser-status.js` | List debuggable instances and tabs; `--port N` exits 0 if in use |
 | `browser-nav.js` | Navigate the active tab, or `--new` for a new one |
 | `browser-eval.js` | Run JS in the active tab |
@@ -50,7 +50,7 @@ its own Chrome instance and profile dir, so several browsers can run at once.
 | `browser-clean.js` | Reclaim tmp screenshots/recordings and idle profile dirs |
 
 `scripts/lib.mjs` exports `connect`, `activePage`, `allPages`, `evalAsync`,
-`printResult`, `sleep`, `tmpPath`, `CDP_PORT` for one-off scripts.
+`printResult`, `sleep`, `tmpPath`, `isHeadless`, `CDP_PORT` for one-off scripts.
 
 ## Requirements
 

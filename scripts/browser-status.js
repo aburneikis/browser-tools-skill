@@ -12,6 +12,7 @@
  */
 
 import { execSync } from "node:child_process";
+import { isHeadless } from "./lib.mjs";
 
 function argPort() {
 	const i = process.argv.indexOf("--port");
@@ -69,7 +70,8 @@ for (const port of ports) {
 		continue;
 	}
 	anyRunning = true;
-	console.log(`:${port}  ${info.version.Browser}  (${info.tabs.length} tab${info.tabs.length === 1 ? "" : "s"})`);
+	const mode = isHeadless(port) ? "headless" : "headed";
+	console.log(`:${port}  ${info.version.Browser} ${mode}  (${info.tabs.length} tab${info.tabs.length === 1 ? "" : "s"})`);
 	for (const tab of info.tabs) {
 		console.log(`      ${tab.url}`);
 	}

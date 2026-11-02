@@ -1,4 +1,5 @@
 // Shared helpers for the browser-tools scripts.
+import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import puppeteer from "puppeteer-core";
@@ -22,6 +23,21 @@ const BROWSER_URL = `http://localhost:${CDP_PORT}`;
 // so an impatient timeout must not be mistaken for a broken tab.
 const CONNECT_TIMEOUT = Math.max(10000, Number(process.env.CDP_CONNECT_TIMEOUT ?? 20000));
 const PROBE_TIMEOUT = 8000;
+
+/**
+ * True if the Chrome on the port was launched headless. Read from the process
+ * flags because browser-start.js overrides the user agent, which also hides
+ * "HeadlessChrome" from /json/version.
+ */
+export function isHeadless(port = CDP_PORT) {
+	try {
+		// "[-]" keeps the pattern from matching the shell running pgrep.
+		const processes = execSync(`pgrep -af -- '[-]-remote-debugging-port=${port}'`, { encoding: "utf8" });
+		return processes.includes("--headless");
+	} catch {
+		return false;
+	}
+}
 
 /**
  * A single tab can wedge puppeteer's attach handshake (an unresponsive OOPIF

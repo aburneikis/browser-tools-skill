@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { connect, activePage, printResult } from "./lib.mjs";
+import { connect, activePage, printResult, isHeadless, CDP_PORT } from "./lib.mjs";
 
 const message = process.argv.slice(2).join(" ");
 if (!message) {
@@ -11,6 +11,12 @@ if (!message) {
 }
 
 const browser = await connect();
+if (isHeadless()) {
+	console.error(`✗ Chrome on :${CDP_PORT} is headless, nobody can click in it.`);
+	console.error(`  Restart it headed: pkill -f '[r]emote-debugging-port=${CDP_PORT}' && browser-start.js --headed`);
+	await browser.disconnect();
+	process.exit(1);
+}
 const page = await activePage(browser);
 
 // Inject pick() helper into current page (overwrite any stale version from a previous run)

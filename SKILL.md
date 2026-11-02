@@ -1,11 +1,13 @@
 ---
 name: browser-tools
-description: Interactive browser automation via Chrome DevTools Protocol. Use when you need to interact with web pages, test frontends, or when user interaction with a visible browser is required.
+description: Interactive browser automation via Chrome DevTools Protocol, headless by default. Use when you need to interact with web pages, test frontends, or when user interaction with a visible browser is required.
 ---
 
 # Browser Tools
 
 Scripts that drive Chrome via CDP on `:9222` (override with `CDP_PORT`).
+
+Chrome runs headless by default (1920x1080 window, normal Chrome user agent). Start it with `--headed` when a person needs the window: `browser-pick.js`, user-driven `--none` recording or network capture, manual login (2FA, SSO), or the user wants to watch. The mode is fixed at launch; to switch, stop the instance and start it again. `browser-status.js` shows each instance's mode.
 
 ## Setup
 
@@ -26,7 +28,7 @@ All scripts live in `{baseDir}/scripts/`.
 
 | Script | Usage / notes |
 |---|---|
-| `browser-start.js [--profile] [--no-extensions]` | Launch Chrome with remote debugging. `--profile` copies the user's profile (cookies, logins). Idempotent per port. |
+| `browser-start.js [--profile] [--no-extensions] [--headed]` | Launch Chrome with remote debugging, headless unless `--headed`. `--profile` copies the user's profile (cookies, logins). Idempotent per port. |
 | `browser-status.js [--port N]` | List debuggable Chrome instances + tabs. With `--port`: exit 0 if running, 1 if free. |
 | `browser-nav.js <url> [--new] [--reload]` | Navigate; `--new` opens a new tab; `--reload` forces a reload after navigating. |
 | `browser-eval.js '<js>'` | Run JS in the active tab (async context). Nested objects/arrays are JSON-serialised in the output. |
@@ -35,7 +37,7 @@ All scripts live in `{baseDir}/scripts/`.
 | `browser-screenshot.js [--full] [--selector S] [path]` | Capture viewport/page/element; prints file path. |
 | `browser-record.js ...` | Record transitions - see below. |
 | `browser-emulate.js mobile\|tablet\|desktop\|WxH\|reset\|--offline\|--online` | Viewport/device/network emulation. Viewport overrides persist after exit; user-agent does not. |
-| `browser-pick.js "<prompt>"` | Interactive element picker: the user clicks elements (Cmd/Ctrl+Click for multiple, Enter when done); returns CSS selectors. Use whenever the user wants to point at elements on the page. |
+| `browser-pick.js "<prompt>"` | Interactive element picker: the user clicks elements (Cmd/Ctrl+Click for multiple, Enter when done); returns CSS selectors. Use whenever the user wants to point at elements on the page. Needs `--headed`. |
 | `browser-upload.js <sel> <file...>` | Attach files to an `<input type=file>` (JS cannot set `input.files`). For dropzones, target the hidden nested file input. Multiple files need the `multiple` attribute. |
 | `browser-cookies.js` | Dump cookies for the current tab. |
 | `browser-content.js <url>` | Navigate and extract readable page content as markdown. |
@@ -55,7 +57,7 @@ Use it for "did the button hit the endpoint, and what came back?" and for pages 
 ```bash
 {baseDir}/scripts/browser-network.js --click 'UPGRADE' --filter escalate.php --body
 {baseDir}/scripts/browser-network.js --nav https://host/messages --failures
-{baseDir}/scripts/browser-network.js --none --duration 15 --failures   # user drives
+{baseDir}/scripts/browser-network.js --none --duration 15 --failures   # user drives (--headed)
 ```
 
 Actions: `--nav <url>`, `--reload`, `--click <sel-or-button-text>`, `--eval '<js>'`, `--none`.
@@ -73,8 +75,8 @@ A screenshot taken after an action almost always misses the transient moment (sp
 {baseDir}/scripts/browser-record.js --click 'button[type=submit]' --duration 6 --fps 8
 {baseDir}/scripts/browser-record.js --nav https://example.com/login --duration 4
 {baseDir}/scripts/browser-record.js --eval '<js that triggers the transition>'
-{baseDir}/scripts/browser-record.js --none --duration 10                        # user drives, you record
-{baseDir}/scripts/browser-record.js --none --wait-enter --video /tmp/demo.mp4   # record until Enter (needs a tty - run it yourself)
+{baseDir}/scripts/browser-record.js --none --duration 10                        # user drives (--headed), you record
+{baseDir}/scripts/browser-record.js --none --wait-enter --video /tmp/demo.mp4   # record until Enter (--headed, needs a tty - run it yourself)
 ```
 
 Output is a dir of `frame-NNNN-<ms>ms.png` plus `timeline.txt` interleaving frames with navigated/load/dialog/console-error events - read specific frames with the read tool. Add `--video [file.mp4]` or `--gif [file.gif]` to encode with ffmpeg (frames deleted after encode unless `--keep-frames`). The recording covers the CDP tab only.
@@ -91,4 +93,4 @@ Always trigger the action via `--click/--eval/--nav` in the same invocation - cl
 - For layout/truncation bugs: `browser-emulate.js 760x760`, read computed styles via eval, then `browser-screenshot.js --selector`.
 - Investigate page structure (title, forms, buttons, inputs) with one eval before interacting.
 - Before taking a port, check it: `browser-status.js --port N` for CDP ports, `ss -ltnp "sport = :7766"` for anything else.
-- If a browser command hangs for a long time and then finishes suddenly, suspect a hidden Chrome window (rendering is paused); make it visible and retry.
+- Headed only: if a browser command hangs for a long time and then finishes suddenly, suspect a hidden Chrome window (rendering is paused); make it visible and retry.

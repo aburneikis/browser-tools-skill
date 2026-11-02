@@ -7,15 +7,18 @@ import { isChromeUp } from "./lib.mjs";
 const args = process.argv.slice(2);
 const useProfile = args.includes("--profile");
 const noExtensions = args.includes("--no-extensions");
-const unknown = args.filter((a) => a !== "--profile" && a !== "--no-extensions");
+const headed = args.includes("--headed");
+const unknown = args.filter((a) => !["--profile", "--no-extensions", "--headed"].includes(a));
 
 if (unknown.length) {
-	console.log("Usage: [CDP_PORT=<port>] browser-start.js [--profile] [--no-extensions]");
+	console.log("Usage: [CDP_PORT=<port>] browser-start.js [--profile] [--no-extensions] [--headed]");
 	console.log("\nOptions:");
 	console.log("  --profile        Copy your default Chrome profile (cookies, logins,");
 	console.log("                   extensions)");
 	console.log("  --no-extensions  Disable extensions (Web Store installs will fail");
 	console.log("                   with 'Installation is not enabled')");
+	console.log("  --headed         Show a Chrome window (default is headless). Needed");
+	console.log("                   when the user clicks or types in the browser.");
 	console.log("\nEnvironment:");
 	console.log("  CDP_PORT   Remote debugging port (default 9222). Each port gets");
 	console.log("             its own Chrome instance and profile dir, so multiple");
@@ -33,7 +36,7 @@ const PROFILE_DIR =
 		: `${process.env.HOME}/.cache/browser-tools-${CDP_PORT}`;
 
 if (await isChromeUp(CDP_PORT)) {
-	console.log(`✓ Chrome already running on :${CDP_PORT}`);
+	console.log(`✓ Chrome already running on :${CDP_PORT} (restart it to change --headed)`);
 	process.exit(0);
 }
 
@@ -92,6 +95,19 @@ function disablePasswordManager(prefsPath) {
 	writeFileSync(prefsPath, JSON.stringify(prefs));
 }
 
+const HEADLESS_WINDOW_SIZE = "1920,1080";
+
+// Headless advertises "HeadlessChrome" in its user agent, which some sites
+// (Google sign-in, Cloudflare) reject, so present the headed one instead.
+function headedUserAgent() {
+	const major = execSync("google-chrome --version", { encoding: "utf8" }).match(/(\d+)\./)[1];
+	return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+}
+
+const displayFlags = headed
+	? ["--ozone-platform=wayland"]
+	: ["--headless=new", `--window-size=${HEADLESS_WINDOW_SIZE}`, `--user-agent=${headedUserAgent()}`];
+
 // Start Chrome with flags to force new instance
 spawn(
 	"google-chrome",
@@ -106,7 +122,7 @@ spawn(
 		"--password-store=basic",
 		"--disable-features=PasswordManagerOnboarding,PasswordLeakDetection,AutofillServerCommunication",
 		...(noExtensions ? ["--disable-extensions"] : []),
-		"--ozone-platform=wayland",
+		...displayFlags,
 		// WebGL support
 		"--ignore-gpu-blocklist",
 		"--enable-webgl",
@@ -129,5 +145,5 @@ if (!connected) {
 }
 
 console.log(
-	`✓ Chrome started on :${CDP_PORT}${useProfile ? " with your profile" : ""}${noExtensions ? " (extensions disabled)" : ""}`,
+	`✓ Chrome started ${headed ? "headed" : "headless"} on :${CDP_PORT}${useProfile ? " with your profile" : ""}${noExtensions ? " (extensions disabled)" : ""}`,
 );
