@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Emulate viewport sizes / mobile devices / offline mode on the active tab.
-import { connect, activePage, sleep } from "./lib.mjs";
+import { connect, activePage, sleep, savedEmulation, saveEmulation, applyEmulation } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 if (!args.length) {
@@ -15,8 +15,8 @@ if (!args.length) {
 	process.exit(1);
 }
 
-// Note: user-agent overrides are per-CDP-session and vanish when this script disconnects,
-// so presets only set viewport / mobile / touch, which do persist.
+// Overrides are saved per tab and re-applied by every script on connect (see
+// lib.mjs). User-agent overrides are not, so presets only set viewport / touch.
 const presets = {
 	mobile: { width: 390, height: 844, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 	tablet: { width: 820, height: 1180, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
@@ -36,11 +36,12 @@ for (let i = 0; i < args.length; i++) {
 const browser = await connect();
 const page = await activePage(browser);
 
+const before = savedEmulation(page);
+const after = { ...before };
+
 if (target === "reset") {
-	const session = await page.createCDPSession();
-	await session.send("Emulation.clearDeviceMetricsOverride");
-	await session.detach();
-	console.log("emulation reset");
+	delete after.viewport;
+	delete after.offline;
 } else if (target) {
 	const m = /^(\d+)x(\d+)$/.exec(target);
 	const cfg = presets[target] || (m ? { width: +m[1], height: +m[2], isMobile: false, deviceScaleFactor: 1 } : null);
@@ -48,20 +49,25 @@ if (target === "reset") {
 		console.error(`✗ Unknown preset: ${target} (use mobile|tablet|desktop|reset|WIDTHxHEIGHT)`);
 		process.exit(1);
 	}
-	await page.setViewport({
-		width: cfg.width,
-		height: cfg.height,
-		isMobile: !!cfg.isMobile,
-		hasTouch: !!cfg.hasTouch,
-		deviceScaleFactor: cfg.deviceScaleFactor ?? 1,
-	});
-	await sleep(wait);
-	console.log(`viewport ${cfg.width}x${cfg.height}${cfg.isMobile ? " (mobile)" : ""}: ${page.url()}`);
+	after.viewport = { isMobile: false, hasTouch: false, deviceScaleFactor: 1, ...cfg };
 }
+if (offline === true) after.offline = true;
+if (offline === false) delete after.offline;
 
-if (offline !== null) {
-	await page.setOfflineMode(offline);
-	console.log(offline ? "offline" : "online");
+saveEmulation(page, after);
+await applyEmulation(page, after);
+
+// Pages detect touch support once at load, so a touch change needs a reload.
+const touchChanged = !!before.viewport?.hasTouch !== !!after.viewport?.hasTouch;
+if (touchChanged && after.offline) console.error("⚠ touch support changed: reload the page once back online");
+else if (touchChanged) await page.reload({ waitUntil: "domcontentloaded" });
+await sleep(wait);
+
+if (target === "reset") console.log("emulation reset");
+else if (target) {
+	const v = after.viewport;
+	console.log(`viewport ${v.width}x${v.height}${v.isMobile ? " (mobile)" : ""}: ${page.url()}`);
 }
+if (offline !== null) console.log(offline ? "offline" : "online");
 
 await browser.disconnect();

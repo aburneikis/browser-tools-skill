@@ -72,6 +72,10 @@ if (waitEnter && !durationGiven) duration = Infinity;
 
 outDir = outDir || tmpPath("record");
 mkdirSync(outDir, { recursive: true });
+// The pid of a backgrounded recorder is easy to lose ($! may be a wrapping
+// shell that ignores signals), so leave it where the caller can find it.
+const pidFile = join(outDir, "record.pid");
+writeFileSync(pidFile, String(process.pid));
 
 const browser = await connect();
 const page = await activePage(browser);
@@ -154,16 +158,20 @@ try {
 	log("trigger-err", e.message);
 }
 
+// SIGINT/SIGTERM end the recording early but still write the timeline and
+// encode, so a backgrounded recorder can be stopped with kill.
+const stopSignal = new Promise((resolve) => {
+	for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => resolve(signal));
+});
+const stoppers = [stopSignal];
+if (duration !== Infinity) stoppers.push(sleep(duration * 1000).then(() => "duration"));
 if (waitEnter) {
 	console.error("\nRecording... perform your actions in the browser, then press Enter here to stop.");
-	await Promise.race([
-		new Promise((r) => process.stdin.once("data", r)),
-		duration === Infinity ? new Promise(() => {}) : sleep(duration * 1000),
-	]);
-	process.stdin.pause();
-} else {
-	await sleep(duration * 1000);
+	stoppers.push(new Promise((r) => process.stdin.once("data", () => r("enter"))));
 }
+const stoppedBy = await Promise.race(stoppers);
+if (waitEnter) process.stdin.pause();
+if (stoppedBy.startsWith("SIG")) log("stop", stoppedBy);
 clearInterval(tick);
 try {
 	await session.send("Page.stopScreencast");
@@ -239,3 +247,5 @@ if (encoded && !keepFrames) {
 }
 
 await browser.disconnect();
+rmSync(pidFile, { force: true });
+console.log("✓ recording done");

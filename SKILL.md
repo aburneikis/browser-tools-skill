@@ -31,12 +31,12 @@ All scripts live in `{baseDir}/scripts/`.
 | `browser-start.js [--profile] [--no-extensions] [--headed]` | Launch Chrome with remote debugging, headless unless `--headed`. `--profile` copies the user's profile (cookies, logins). Idempotent per port. |
 | `browser-status.js [--port N]` | List debuggable Chrome instances + tabs. With `--port`: exit 0 if running, 1 if free. |
 | `browser-nav.js <url> [--new] [--reload]` | Navigate; `--new` opens a new tab; `--reload` forces a reload after navigating. |
-| `browser-eval.js '<js>'` | Run JS in the active tab (async context). Nested objects/arrays are JSON-serialised in the output. |
+| `browser-eval.js '<js>'` | Evaluate one JS expression in the active tab (async context; use an IIFE or comma expression for statements). Nested objects/arrays are JSON-serialised in the output. |
 | `browser-network.js [action] [opts]` | Log requests while acting - see below. |
 | `browser-type.js <sel> <text> [--enter] [--pick-suggestion [sel]] [--delay ms]` | Real keyboard events (waits for selector, clears existing value). Prefer over setting `input.value` via eval - frameworks and autocompletes need real events. Default suggestion selector handles Google Places. |
 | `browser-screenshot.js [--full] [--selector S] [path]` | Capture viewport/page/element; prints file path. |
 | `browser-record.js ...` | Record transitions - see below. |
-| `browser-emulate.js mobile\|tablet\|desktop\|WxH\|reset\|--offline\|--online` | Viewport/device/network emulation. Viewport overrides persist after exit; user-agent does not. |
+| `browser-emulate.js mobile\|tablet\|desktop\|WxH\|reset\|--offline\|--online` | Viewport/device/network emulation for the active tab. Viewport and offline persist for later commands on that tab until `reset`; user-agent does not. |
 | `browser-pick.js "<prompt>"` | Interactive element picker: the user clicks elements (Cmd/Ctrl+Click for multiple, Enter when done); returns CSS selectors. Use whenever the user wants to point at elements on the page. Needs `--headed`. |
 | `browser-upload.js <sel> <file...>` | Attach files to an `<input type=file>` (JS cannot set `input.files`). For dropzones, target the hidden nested file input. Multiple files need the `multiple` attribute. |
 | `browser-cookies.js` | Dump cookies for the current tab. |
@@ -78,6 +78,16 @@ A screenshot taken after an action almost always misses the transient moment (sp
 {baseDir}/scripts/browser-record.js --none --duration 10                        # user drives (--headed), you record
 {baseDir}/scripts/browser-record.js --none --wait-enter --video /tmp/demo.mp4   # record until Enter (--headed, needs a tty - run it yourself)
 ```
+
+To record a multi-step flow you drive yourself, run the recorder in the background with `--none`, act with the other scripts, then stop it. It still writes the timeline and encodes:
+
+```bash
+{baseDir}/scripts/browser-record.js --none --duration 300 --out /tmp/rec > /tmp/rec.log 2>&1 &
+{baseDir}/scripts/browser-type.js '#email' 'a@b.co' --enter    # ...any other actions, in later commands too
+kill $(cat /tmp/rec/record.pid); until grep -q 'recording done' /tmp/rec.log; do sleep 0.5; done
+```
+
+Stop via `record.pid`, not `$!` (that can be a wrapping shell, which ignores SIGINT), and wait on the log, not the pid (a recorder started from an earlier shell lingers as a zombie). `--duration` is a safety cap. Frames are written as they arrive; `timeline.txt` and any video only after the stop. Only the tab that was active at start is recorded (`browser-nav.js --new` escapes it).
 
 Output is a dir of `frame-NNNN-<ms>ms.png` plus `timeline.txt` interleaving frames with navigated/load/dialog/console-error events - read specific frames with the read tool. Add `--video [file.mp4]` or `--gif [file.gif]` to encode with ffmpeg (frames deleted after encode unless `--keep-frames`). The recording covers the CDP tab only.
 

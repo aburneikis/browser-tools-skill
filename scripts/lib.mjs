@@ -1,5 +1,6 @@
 // Shared helpers for the browser-tools scripts.
 import { execSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import puppeteer from "puppeteer-core";
@@ -205,7 +206,13 @@ export function isUserTab(url) {
 export async function activePage(browser, match) {
 	const pages = (await allPages(browser)).filter((p) => isUserTab(p.url()));
 	const page = (match && pages.find((p) => p.url().includes(match))) || pages.at(-1);
-	if (page) return page;
+	if (page) {
+		const emulation = savedEmulation(page);
+		if (Object.keys(emulation).length && !(await emulationInEffect(page, emulation))) {
+			await applyEmulation(page, emulation);
+		}
+		return page;
+	}
 
 	// Every tab failed to attach. Open a replacement first - closing the last
 	// tab would quit Chrome - then drop the broken ones.
@@ -224,6 +231,96 @@ export async function activePage(browser, match) {
 	exitWithRestartHint("No usable tab found");
 }
 
+/*
+ * Chrome drops emulation overrides when the CDP client that set them
+ * disconnects, so browser-emulate.js saves them per tab and scripts re-apply
+ * them on connect. Tab ids are unique per launch, so entries left over from a
+ * previous Chrome never match.
+ *
+ * Overrides do not stack across clients: when any client that set one
+ * disconnects, the tab loses it, even if another client (e.g. a background
+ * browser-record.js) set it too. So a script only applies emulation that is
+ * not already in effect, leaving the long-lived client as the sole holder.
+ */
+const EMULATION_FILE = join(tmpdir(), `browser-tools-${CDP_PORT}-emulation.json`);
+const emulationSessions = new WeakMap();
+
+function readEmulations() {
+	try {
+		return JSON.parse(readFileSync(EMULATION_FILE, "utf8"));
+	} catch {
+		return {};
+	}
+}
+
+/** Emulation saved for this tab: { viewport?: {width, height, isMobile, hasTouch, deviceScaleFactor}, offline?: true }. */
+export function savedEmulation(page) {
+	return readEmulations()[page.target()._targetId] ?? {};
+}
+
+export function saveEmulation(page, emulation) {
+	const all = readEmulations();
+	const id = page.target()._targetId;
+	if (Object.keys(emulation).length) all[id] = emulation;
+	else delete all[id];
+	writeFileSync(EMULATION_FILE, JSON.stringify(all));
+}
+
+/** screen.* follows the override even when a page without a viewport meta lays out wider. */
+async function emulationInEffect(page, { viewport, offline }) {
+	const actual = await page.evaluate(() => ({
+		width: screen.width,
+		height: screen.height,
+		dpr: devicePixelRatio,
+		online: navigator.onLine,
+	}));
+	const viewportMatches =
+		!viewport ||
+		(actual.width === viewport.width &&
+			actual.height === viewport.height &&
+			actual.dpr === viewport.deviceScaleFactor);
+	return viewportMatches && actual.online === !offline;
+}
+
+/**
+ * Apply emulation through raw CDP: puppeteer's setViewport reloads the page
+ * whenever mobile/touch changes, which would reload on every connect. The
+ * session is kept per page because overrides vanish when it detaches.
+ */
+export async function applyEmulation(page, { viewport, offline }) {
+	let session = emulationSessions.get(page);
+	if (!session) {
+		session = await page.createCDPSession();
+		emulationSessions.set(page, session);
+	}
+	if (viewport) {
+		await session.send("Emulation.setDeviceMetricsOverride", {
+			width: viewport.width,
+			height: viewport.height,
+			deviceScaleFactor: viewport.deviceScaleFactor,
+			mobile: viewport.isMobile,
+		});
+		await session.send("Emulation.setTouchEmulationEnabled", {
+			enabled: viewport.hasTouch,
+			...(viewport.hasTouch && { maxTouchPoints: 5 }),
+		});
+	} else {
+		await session.send("Emulation.clearDeviceMetricsOverride");
+		await session.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+	}
+	await session.send("Network.emulateNetworkConditions", {
+		offline: !!offline,
+		latency: 0,
+		downloadThroughput: -1,
+		uploadThroughput: -1,
+	});
+	// Let the page lay out at the new size before the caller reads or captures it.
+	await withTimeout(
+		page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))),
+		300,
+	).catch(() => {});
+}
+
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Evaluate an expression string in the page within an async context. */
@@ -235,7 +332,8 @@ export function evalAsync(page, code) {
 }
 
 /**
- * Print an eval result: arrays as blocks of key: value, objects as key: value, scalars as-is.
+ * Print an eval result: arrays of objects as blocks of key: value, objects as key: value,
+ * scalars (including array items) as-is.
  *
  * Nested objects and arrays are JSON-serialised rather than stringified, so a returned
  * value never degrades into "[object Object]".
@@ -254,6 +352,7 @@ export function printResult(result) {
 	};
 	if (Array.isArray(result)) {
 		result.forEach((item, i) => {
+			if (typeof item !== "object" || item === null) return console.log(show(item));
 			if (i > 0) console.log("");
 			printEntries(item);
 		});
