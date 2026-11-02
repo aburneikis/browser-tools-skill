@@ -266,19 +266,29 @@ export function saveEmulation(page, emulation) {
 	writeFileSync(EMULATION_FILE, JSON.stringify(all));
 }
 
-/** screen.* follows the override even when a page without a viewport meta lays out wider. */
+/**
+ * screen.* follows the override (applyEmulation sets it) even when a page
+ * without a viewport meta lays out wider. But the real screen can match an
+ * emulated size too, so for desktop sizes also require the window to match:
+ * without an override the browser UI takes part of the window (1920x1080
+ * lays out as 1920x993).
+ */
 async function emulationInEffect(page, { viewport, offline }) {
 	const actual = await page.evaluate(() => ({
-		width: screen.width,
-		height: screen.height,
+		screenWidth: screen.width,
+		screenHeight: screen.height,
+		innerWidth,
+		innerHeight,
 		dpr: devicePixelRatio,
 		online: navigator.onLine,
 	}));
 	const viewportMatches =
 		!viewport ||
-		(actual.width === viewport.width &&
-			actual.height === viewport.height &&
-			actual.dpr === viewport.deviceScaleFactor);
+		(actual.screenWidth === viewport.width &&
+			actual.screenHeight === viewport.height &&
+			actual.dpr === viewport.deviceScaleFactor &&
+			(viewport.isMobile ||
+				(actual.innerWidth === viewport.width && actual.innerHeight === viewport.height)));
 	return viewportMatches && actual.online === !offline;
 }
 
@@ -299,6 +309,9 @@ export async function applyEmulation(page, { viewport, offline }) {
 			height: viewport.height,
 			deviceScaleFactor: viewport.deviceScaleFactor,
 			mobile: viewport.isMobile,
+			// Desktop overrides otherwise keep the real screen size.
+			screenWidth: viewport.width,
+			screenHeight: viewport.height,
 		});
 		await session.send("Emulation.setTouchEmulationEnabled", {
 			enabled: viewport.hasTouch,

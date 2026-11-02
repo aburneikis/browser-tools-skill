@@ -7,7 +7,7 @@ description: Interactive browser automation via Chrome DevTools Protocol, headle
 
 Scripts that drive Chrome via CDP on `:9222` (override with `CDP_PORT`).
 
-Chrome runs headless by default (1920x1080 window, normal Chrome user agent). Start it with `--headed` when a person needs the window: `browser-pick.js`, user-driven `--none` recording or network capture, manual login (2FA, SSO), or the user wants to watch. The mode is fixed at launch; to switch, stop the instance and start it again. `browser-status.js` shows each instance's mode.
+Chrome runs headless by default (1920x1080 window and screen, normal Chrome user agent). Start it with `--headed` when a person needs the window: `browser-pick.js`, user-driven `--none` recording or network capture, manual login (2FA, SSO), or the user wants to watch. The mode is fixed at launch; to switch, stop the instance and start it again. `browser-status.js` shows each instance's mode.
 
 ## Setup
 

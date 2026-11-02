@@ -95,7 +95,8 @@ function disablePasswordManager(prefsPath) {
 	writeFileSync(prefsPath, JSON.stringify(prefs));
 }
 
-const HEADLESS_WINDOW_SIZE = "1920,1080";
+const HEADLESS_WIDTH = 1920;
+const HEADLESS_HEIGHT = 1080;
 
 // Headless advertises "HeadlessChrome" in its user agent, which some sites
 // (Google sign-in, Cloudflare) reject, so present the headed one instead.
@@ -106,7 +107,13 @@ function headedUserAgent() {
 
 const displayFlags = headed
 	? ["--ozone-platform=wayland"]
-	: ["--headless=new", `--window-size=${HEADLESS_WINDOW_SIZE}`, `--user-agent=${headedUserAgent()}`];
+	: [
+			"--headless=new",
+			`--window-size=${HEADLESS_WIDTH},${HEADLESS_HEIGHT}`,
+			// Headless otherwise reports an 800x600 screen behind the larger window.
+			`--screen-info={${HEADLESS_WIDTH}x${HEADLESS_HEIGHT}}`,
+			`--user-agent=${headedUserAgent()}`,
+		];
 
 // Start Chrome with flags to force new instance
 spawn(
