@@ -25,7 +25,7 @@ scripts/browser-start.js --profile     # launch headless Chrome (--headed for a 
 scripts/browser-nav.js https://example.com
 scripts/browser-eval.js 'document.title'
 scripts/browser-screenshot.js
-pkill -f 'remote-debugging-port=9222'  # stop it
+scripts/browser-stop.js                # stop it
 ```
 
 Every script talks to `localhost:9222` unless `CDP_PORT` is set. Each port gets
@@ -36,6 +36,7 @@ its own Chrome instance and profile dir, so several browsers can run at once.
 | Script | Purpose |
 |---|---|
 | `browser-start.js` | Launch Chrome with remote debugging, headless unless `--headed` (`--profile` clones your real profile) |
+| `browser-stop.js` | Close an instance (headless ones also stop after `BROWSER_IDLE_MINUTES` idle, default 30) |
 | `browser-status.js` | List debuggable instances and tabs; `--port N` exits 0 if in use |
 | `browser-nav.js` | Navigate the active tab, or `--new` for a new one |
 | `browser-eval.js` | Run JS in the active tab |
@@ -50,7 +51,7 @@ its own Chrome instance and profile dir, so several browsers can run at once.
 | `browser-clean.js` | Reclaim tmp screenshots/recordings and idle profile dirs |
 
 `scripts/lib.mjs` exports `connect`, `activePage`, `allPages`, `evalAsync`,
-`printResult`, `sleep`, `tmpPath`, `isHeadless`, `CDP_PORT` for one-off scripts.
+`printResult`, `sleep`, `tmpPath`, `isHeadless`, `stopChrome`, `CDP_PORT` for one-off scripts.
 
 ## Requirements
 
@@ -61,8 +62,8 @@ its own Chrome instance and profile dir, so several browsers can run at once.
 
 ## Portability notes
 
-The scripts are OS agnostic except for `scripts/browser-start.js`, which
-assumes a Linux + Wayland desktop:
+The scripts are OS agnostic except for `scripts/browser-start.js` and the
+process lookup in `scripts/lib.mjs`, which assume a Linux + Wayland desktop:
 
 | Assumption | Where | Change for other systems |
 |---|---|---|
@@ -70,7 +71,8 @@ assumes a Linux + Wayland desktop:
 | Profile source `~/.config/google-chrome/` | `--profile` rsync | macOS: `~/Library/Application Support/Google/Chrome`; Windows: `%LOCALAPPDATA%\Google\Chrome\User Data` |
 | `--ozone-platform=wayland` | Chrome flags | Drop it on X11 or macOS |
 | SwiftShader / `--use-angle=swiftshader` WebGL flags | Chrome flags | Tuned for software GL; harmless but unnecessary with a real GPU |
-| `mkdir -p`, `rm -f`, `rsync`, `pkill` | shell calls | POSIX only |
+| `mkdir -p`, `rm -f`, `rsync`, `ps` | shell calls | POSIX only |
+| Chrome processes found via `ps` as an executable ending in `/chrome` | `chromeProcesses` in `lib.mjs` (stop, idle stop, headless check) | macOS executable is `Google Chrome`; Windows has no `ps` |
 
 Other environment assumptions:
 

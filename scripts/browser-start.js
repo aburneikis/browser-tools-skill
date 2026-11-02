@@ -2,7 +2,8 @@
 
 import { spawn, execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { isChromeUp } from "./lib.mjs";
+import { fileURLToPath } from "node:url";
+import { isChromeUp, markActive, portFile } from "./lib.mjs";
 
 const args = process.argv.slice(2);
 const useProfile = args.includes("--profile");
@@ -23,6 +24,8 @@ if (unknown.length) {
 	console.log("  CDP_PORT   Remote debugging port (default 9222). Each port gets");
 	console.log("             its own Chrome instance and profile dir, so multiple");
 	console.log("             browsers can run simultaneously.");
+	console.log("  BROWSER_IDLE_MINUTES  Stop a headless instance after this long");
+	console.log("             without any script using it (default 30, 0 = never).");
 	process.exit(1);
 }
 
@@ -139,6 +142,9 @@ spawn(
 	{ detached: true, stdio: "ignore" },
 ).unref();
 
+rmSync(portFile(CDP_PORT, "idle-stopped"), { force: true });
+markActive(CDP_PORT);
+
 // Wait for Chrome to be ready
 let connected = false;
 for (let i = 0; i < 30 && !connected; i++) {
@@ -151,6 +157,19 @@ if (!connected) {
 	process.exit(1);
 }
 
+// Started only now: it exits as soon as it finds no Chrome on the port.
+const idleMinutes = Number(process.env.BROWSER_IDLE_MINUTES ?? 30);
+if (!headed && idleMinutes > 0) {
+	spawn(process.execPath, [fileURLToPath(new URL("./idle-stop.mjs", import.meta.url)), String(CDP_PORT), String(idleMinutes)], {
+		detached: true,
+		stdio: "ignore",
+	}).unref();
+}
+
 console.log(
 	`✓ Chrome started ${headed ? "headed" : "headless"} on :${CDP_PORT}${useProfile ? " with your profile" : ""}${noExtensions ? " (extensions disabled)" : ""}`,
 );
+if (!headed) {
+	const autoStop = idleMinutes > 0 ? `, auto-stops after ${idleMinutes} idle minutes` : "";
+	console.log(`  Stop it with browser-stop.js when done${autoStop}`);
+}

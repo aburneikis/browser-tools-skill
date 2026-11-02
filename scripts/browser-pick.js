@@ -13,7 +13,7 @@ if (!message) {
 const browser = await connect();
 if (isHeadless()) {
 	console.error(`✗ Chrome on :${CDP_PORT} is headless, nobody can click in it.`);
-	console.error(`  Restart it headed: pkill -f '[r]emote-debugging-port=${CDP_PORT}' && browser-start.js --headed`);
+	console.error(`  Restart it headed: browser-stop.js && browser-start.js --headed`);
 	await browser.disconnect();
 	process.exit(1);
 }

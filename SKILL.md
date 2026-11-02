@@ -29,6 +29,7 @@ All scripts live in `{baseDir}/scripts/`.
 | Script | Usage / notes |
 |---|---|
 | `browser-start.js [--profile] [--no-extensions] [--headed]` | Launch Chrome with remote debugging, headless unless `--headed`. `--profile` copies the user's profile (cookies, logins). Idempotent per port. |
+| `browser-stop.js [--port N]` | Close the instance on `CDP_PORT` (or `--port`). Keeps its profile dir. |
 | `browser-status.js [--port N]` | List debuggable Chrome instances + tabs. With `--port`: exit 0 if running, 1 if free. |
 | `browser-nav.js <url> [--new] [--reload]` | Navigate; `--new` opens a new tab; `--reload` forces a reload after navigating. |
 | `browser-eval.js '<js>'` | Evaluate one JS expression in the active tab (async context; use an IIFE or comma expression for statements). Nested objects/arrays are JSON-serialised in the output. |
@@ -47,7 +48,13 @@ All scripts live in `{baseDir}/scripts/`.
 
 Each `CDP_PORT` gets its own Chrome and profile dir (`~/.cache/browser-tools-<port>`), so several browsers can run and be driven simultaneously. All commands for one instance must use the same `CDP_PORT`.
 
-Stop an instance with `pkill -f 'remote-debugging-port=<port>'`. If you started Chrome solely for a one-off task, ask the user before stopping it. Profile dirs (200-700 MB each) are never deleted automatically - run `browser-clean.js` after sessions that spun up extra ports.
+Stop an instance with `browser-stop.js` (honours `CDP_PORT`). Do not use `pkill -f 'remote-debugging-port=...'`: the pattern also matches the shell running it.
+
+- **Headless instance you started: stop it as soon as the task is done, without asking.** Nobody can see it, so a forgotten one runs unnoticed. Do this before your final answer, also when the task failed or was abandoned.
+- **Headed instance you started:** leave it running and ask the user whether to close it.
+- **Instance you did not start** (`browser-start.js` said "already running"): leave it alone.
+
+As a backstop, a headless instance stops itself after 30 minutes without any script using it (`BROWSER_IDLE_MINUTES`, `0` disables). A running script, including a background recording, counts as use. Do not rely on it instead of stopping. Profile dirs (200-700 MB each) are never deleted automatically - run `browser-clean.js` after sessions that spun up extra ports.
 
 ## Network: what did that action request?
 

@@ -1,6 +1,6 @@
 // Shared helpers for the browser-tools scripts.
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import puppeteer from "puppeteer-core";
@@ -25,19 +25,62 @@ const BROWSER_URL = `http://localhost:${CDP_PORT}`;
 const CONNECT_TIMEOUT = Math.max(10000, Number(process.env.CDP_CONNECT_TIMEOUT ?? 20000));
 const PROBE_TIMEOUT = 8000;
 
+/** Per-port state file in $TMPDIR, e.g. portFile(9222, "last-used"). */
+export const portFile = (port, name) => join(tmpdir(), `browser-tools-${port}-${name}`);
+
+/**
+ * The top-level Chrome processes started with this debugging port. Matched on
+ * the executable and the exact flag so neither child processes (--type=), other
+ * ports sharing a prefix, nor a shell whose command line mentions the port
+ * qualify.
+ */
+export function chromeProcesses(port = CDP_PORT) {
+	const flag = new RegExp(`--remote-debugging-port=${port}(\\s|$)`);
+	return execSync("ps -eo pid=,args=", { encoding: "utf8" })
+		.split("\n")
+		.map((line) => line.trim().match(/^(\d+)\s+(\S+)(.*)$/))
+		.filter((m) => m && /\/chrome$/.test(m[2]) && flag.test(m[3]) && !m[3].includes("--type="))
+		.map((m) => ({ pid: Number(m[1]), args: m[3] }));
+}
+
 /**
  * True if the Chrome on the port was launched headless. Read from the process
  * flags because browser-start.js overrides the user agent, which also hides
  * "HeadlessChrome" from /json/version.
  */
 export function isHeadless(port = CDP_PORT) {
+	return chromeProcesses(port).some((p) => p.args.includes("--headless"));
+}
+
+/** Records that a script is using the instance, read by the headless idle stop. */
+export function markActive(port = CDP_PORT) {
+	writeFileSync(portFile(port, "last-used"), String(Date.now()));
+}
+
+const isAlive = (pid) => {
 	try {
-		// "[-]" keeps the pattern from matching the shell running pgrep.
-		const processes = execSync(`pgrep -af -- '[-]-remote-debugging-port=${port}'`, { encoding: "utf8" });
-		return processes.includes("--headless");
+		process.kill(pid, 0);
+		return true;
 	} catch {
 		return false;
 	}
+};
+
+/** Close the Chrome on the port, killing it if it does not exit. False if none was running. */
+export async function stopChrome(port = CDP_PORT) {
+	const pids = chromeProcesses(port).map((p) => p.pid);
+	if (!pids.length) return false;
+
+	const browser = await withTimeout(
+		puppeteer.connect({ browserURL: `http://localhost:${port}` }).catch(() => null),
+		5000,
+	);
+	await browser?.close().catch(() => {});
+	for (let i = 0; i < 20 && pids.some(isAlive); i++) await sleep(250);
+	for (const pid of pids.filter(isAlive)) process.kill(pid, "SIGKILL");
+
+	for (const name of ["last-used", "emulation.json"]) rmSync(portFile(port, name), { force: true });
+	return true;
 }
 
 /**
@@ -95,7 +138,7 @@ async function openBlankTab() {
 
 function exitWithRestartHint(message) {
 	console.error(`✗ ${message}`);
-	console.error(`  Restart it: pkill -f '[r]emote-debugging-port=${CDP_PORT}' && browser-start.js`);
+	console.error(`  Restart it: browser-stop.js && browser-start.js`);
 	process.exit(1);
 }
 
@@ -144,12 +187,22 @@ async function findWedgedTabs(tabs, timeoutMs) {
 
 /** Connect to the Chrome instance on CDP_PORT, exiting with a useful message on failure. */
 export async function connect(timeoutMs = CONNECT_TIMEOUT) {
+	const browser = await connectOrRecover(timeoutMs);
+	// Keeps a long-running script (e.g. a background recording) counting as use.
+	markActive();
+	setInterval(markActive, 30000).unref();
+	return browser;
+}
+
+async function connectOrRecover(timeoutMs) {
 	const browser = await tryConnect(timeoutMs);
 	if (browser) return browser;
 
 	const tabs = await pageTargets();
 	if (!tabs) {
 		console.error(`✗ Could not reach Chrome on :${CDP_PORT}`);
+		const idleStop = portFile(CDP_PORT, "idle-stopped");
+		if (existsSync(idleStop)) console.error(`  It was stopped after ${readFileSync(idleStop, "utf8")} idle minutes.`);
 		console.error("  Run: browser-start.js");
 		process.exit(1);
 	}
@@ -242,7 +295,7 @@ export async function activePage(browser, match) {
  * browser-record.js) set it too. So a script only applies emulation that is
  * not already in effect, leaving the long-lived client as the sole holder.
  */
-const EMULATION_FILE = join(tmpdir(), `browser-tools-${CDP_PORT}-emulation.json`);
+const EMULATION_FILE = portFile(CDP_PORT, "emulation.json");
 const emulationSessions = new WeakMap();
 
 function readEmulations() {
