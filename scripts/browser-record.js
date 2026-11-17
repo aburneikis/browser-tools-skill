@@ -11,6 +11,7 @@ const args = process.argv.slice(2);
 if (!args.length || args.includes("--help") || args.includes("-h")) {
 	console.log("Usage: browser-record.js [trigger] [--duration s] [--fps n] [--video [file]] [--gif [file]]");
 	console.log("                         [--out dir] [--quality 0-100] [--keep-frames] [--wait-enter]");
+	console.log("                         [--source cast|shot|both]");
 	console.log("\nTriggers (performed AFTER recording starts, so nothing is missed):");
 	console.log("  --click <selector>     click an element");
 	console.log("  --eval  <js>           run JS in the page");
@@ -37,6 +38,7 @@ let gif = null;
 let keepFrames = false;
 let waitEnter = false;
 let durationGiven = false;
+let source = "both";
 
 const optArg = (next) => (next && !next.startsWith("--") ? next : null);
 
@@ -48,6 +50,7 @@ for (let i = 0; i < args.length; i++) {
 	} else if (a === "--fps") fps = parseFloat(args[++i]);
 	else if (a === "--quality") quality = parseInt(args[++i], 10);
 	else if (a === "--out") outDir = args[++i];
+	else if (a === "--source") source = args[++i];
 	else if (a === "--keep-frames") keepFrames = true;
 	else if (a === "--wait-enter") waitEnter = true;
 	else if (a === "--video") {
@@ -90,6 +93,11 @@ const log = (kind, detail) => {
 	console.log(line);
 };
 
+if (!["cast", "shot", "both"].includes(source)) {
+	console.error(`✗ --source must be cast, shot or both (got '${source}')`);
+	process.exit(1);
+}
+
 log("start", page.url());
 
 // Navigation / lifecycle timeline: catches redirect chains you would otherwise never see.
@@ -104,42 +112,54 @@ page.on("console", (m) => {
 page.on("pageerror", (e) => log("pageerror", e.message.slice(0, 200)));
 
 let n = 0;
-const frames = []; // { ms, file } in capture order, used for encoding
+const frames = []; // { ms, file, src } in capture order, used for encoding
 const nextFramePath = (ms) => join(outDir, `frame-${String(n++).padStart(4, "0")}-${ms}ms.png`);
-const recordFrame = (ms, file) => {
-	frames.push({ ms, file });
+const recordFrame = (ms, file, src) => {
+	frames.push({ ms, file, src });
 	timeline.push(`${String(ms).padStart(6)}ms  frame      ${file}`);
 };
 let screencastFrames = 0;
-session.on("Page.screencastFrame", async ({ data, sessionId }) => {
-	screencastFrames++;
-	const ms = at();
-	const file = nextFramePath(ms);
-	writeFileSync(file, Buffer.from(data, "base64"));
-	recordFrame(ms, file);
-	try {
-		await session.send("Page.screencastFrameAck", { sessionId });
-	} catch {}
-});
+if (source !== "shot") {
+	session.on("Page.screencastFrame", async ({ data, sessionId, metadata }) => {
+		screencastFrames++;
+		// Ack first: Chrome sends no further frame until the previous one is acked,
+		// so any work done before this adds straight to the capture lag.
+		try {
+			await session.send("Page.screencastFrameAck", { sessionId });
+		} catch {}
+		// Frames arrive well after they were painted. Timestamp them by the frame
+		// swap time (CDP: seconds since epoch), not by arrival, or they interleave
+		// out of order with the fixed-interval screenshots and the video jumps
+		// back and forth in time.
+		const swapMs = metadata?.timestamp ? Math.round(metadata.timestamp * 1000 - t0) : NaN;
+		const ms = Number.isFinite(swapMs) && swapMs >= 0 && swapMs <= at() ? swapMs : at();
+		const file = nextFramePath(ms);
+		writeFileSync(file, Buffer.from(data, "base64"));
+		recordFrame(ms, file, "cast");
+	});
 
-await session.send("Page.startScreencast", {
-	format: "png",
-	quality,
-	everyNthFrame: 1,
-	maxWidth: 1600,
-	maxHeight: 1600,
-});
+	await session.send("Page.startScreencast", {
+		format: "png",
+		quality,
+		everyNthFrame: 1,
+		maxWidth: 1600,
+		maxHeight: 1600,
+	});
+}
 
 // Screencast only emits frames on repaint, so also sample on a fixed interval
 // to guarantee coverage of static-but-transient states (e.g. a "Redirecting..." page).
-const tick = setInterval(async () => {
-	try {
-		const ms = at();
-		const file = nextFramePath(ms);
-		await page.screenshot({ path: file });
-		recordFrame(ms, file);
-	} catch {}
-}, Math.max(50, Math.round(1000 / fps)));
+const tick =
+	source === "cast"
+		? null
+		: setInterval(async () => {
+				try {
+					const ms = at();
+					const file = nextFramePath(ms);
+					await page.screenshot({ path: file });
+					recordFrame(ms, file, "shot");
+				} catch {}
+			}, Math.max(50, Math.round(1000 / fps)));
 
 // Perform the trigger only once recording is live.
 try {
@@ -172,9 +192,9 @@ if (waitEnter) {
 const stoppedBy = await Promise.race(stoppers);
 if (waitEnter) process.stdin.pause();
 if (stoppedBy.startsWith("SIG")) log("stop", stoppedBy);
-clearInterval(tick);
+if (tick !== null) clearInterval(tick);
 try {
-	await session.send("Page.stopScreencast");
+	if (source !== "shot") await session.send("Page.stopScreencast");
 	await session.detach();
 } catch {}
 log("end", page.url());
@@ -182,11 +202,13 @@ log("end", page.url());
 timeline.sort((a, b) => parseInt(a) - parseInt(b));
 writeFileSync(join(outDir, "timeline.txt"), timeline.join("\n") + "\n");
 console.log(`\n${n} frames -> ${outDir}`);
-if (screencastFrames === 0) {
+if (screencastFrames === 0 && source !== "shot") {
 	console.error(
-		"! no repaint-driven frames arrived: the Chrome window is likely hidden " +
-			"(unfocused workspace / minimized), which stops rendering entirely. Only " +
-			"fixed-interval snapshots were captured, and they may show stale pixels. " +
+		"! no repaint-driven frames arrived: the headed Chrome window is likely hidden " +
+			"(unfocused workspace / minimized), which stops rendering entirely. " +
+			(source === "cast"
+				? "With --source cast there is no fallback, so nothing was captured. "
+				: "Only fixed-interval snapshots were captured, and they may show stale pixels. ") +
 			"Make the Chrome window visible and record again.",
 	);
 }
@@ -194,9 +216,27 @@ console.log(`timeline -> ${join(outDir, "timeline.txt")}`);
 
 // Encode with real per-frame durations so playback speed matches reality,
 // letterboxing to the first frame's size (viewport/DPR changes mid-record are possible).
-frames.sort((a, b) => a.ms - b.ms);
+frames.sort((a, b) => a.ms - b.ms || (a.src === "cast" ? -1 : 1));
+
+// The two sources overlap: a repaint frame and an interval screenshot of the same
+// moment differ in resolution, so alternating between them makes the video shimmer.
+// Keep one frame per half-interval window, preferring the repaint frame.
+const minGap = Math.max(20, Math.round(500 / fps));
+const encodeFrames = [];
+for (const f of frames) {
+	const prev = encodeFrames.at(-1);
+	if (prev === undefined || f.ms - prev.ms >= minGap) {
+		encodeFrames.push(f);
+	} else if (prev.src === "shot" && f.src === "cast") {
+		encodeFrames[encodeFrames.length - 1] = f;
+	}
+}
+if (encodeFrames.length < frames.length) {
+	console.log(`${encodeFrames.length} frames after dedupe (${frames.length - encodeFrames.length} overlapping dropped)`);
+}
 
 function encode(target, isGif) {
+	const frames = encodeFrames;
 	if (frames.length < 2) {
 		console.error("✗ not enough frames to encode");
 		return null;

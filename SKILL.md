@@ -98,6 +98,13 @@ Stop via `record.pid`, not `$!` (that can be a wrapping shell, which ignores SIG
 
 Output is a dir of `frame-NNNN-<ms>ms.png` plus `timeline.txt` interleaving frames with navigated/load/dialog/console-error events - read specific frames with the read tool. Add `--video [file.mp4]` or `--gif [file.gif]` to encode with ffmpeg (frames deleted after encode unless `--keep-frames`). The recording covers the CDP tab only.
 
+Two frame sources run together: repaint-driven CDP screencast frames and fixed-interval
+screenshots. Screencast frames arrive late, so they are timestamped by their frame-swap
+time and overlapping frames are deduped - without that the video jumps back and forth in
+time. For a demo-quality clip pin one source with `--source cast` (smooth; when headed the
+Chrome window must stay visible or no frames arrive) or `--source shot` (works hidden, capped at
+`--fps`). `--source both` (default) maximises coverage.
+
 Always trigger the action via `--click/--eval/--nav` in the same invocation - clicking in one command and recording in another reintroduces the race. Recording dirs land in `$TMPDIR` (`--out <dir>` to control; see clean-up above).
 
 ## Guidelines
